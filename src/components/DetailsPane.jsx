@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { Icon } from '../icons.jsx';
-import { formatBytes, formatDuration, formatSpeed, percent, STATUS_LABELS } from '../format.js';
+import { formatBytes, formatDuration, formatSize, formatSpeed, percent, protocolLabel, STATUS_LABELS } from '../format.js';
 
 // Visual map of the file: each connection's downloaded span is drawn at its
 // byte offset, the way multi-connection download managers show progress.
@@ -34,9 +34,33 @@ function SegmentMap({ download }) {
   );
 }
 
-export function DetailsPane({ download: d }) {
+// Streams: one cell per group of media segments, shaded by how many are done.
+function PieceMap({ download }) {
+  const pieces = download.pieces || [];
+  if (!pieces.length) return <div className="segmap segmap-unknown">Reading the stream manifest…</div>;
+  return (
+    <div className="piecemap">
+      {pieces.map((done, i) => (
+        <span key={i} className={done >= 1 ? 'done' : ''} style={done > 0 && done < 1 ? { opacity: 0.35 + done * 0.65 } : null} />
+      ))}
+    </div>
+  );
+}
+
+function streamSummary(d) {
+  const info = d.streamInfo;
+  if (!info) return '—';
+  const parts = [protocolLabel(d)];
+  if (info.width && info.height) parts.push(`${info.width}×${info.height}`);
+  if (info.bandwidth) parts.push(`${(info.bandwidth / 1e6).toFixed(1)} Mbit/s`);
+  parts.push(info.tracks.map((t) => `${t.type === 'main' ? 'video' : t.type} ${t.segments} segments`).join(', '));
+  return parts.join(' · ');
+}
+
+export function DetailsPane({ download: d, onLogin }) {
   const p = percent(d);
-  const active = d.segments.filter((s) => s.active).length;
+  const isStream = d.kind === 'hls' || d.kind === 'dash';
+  const active = isStream ? d.activeConnections : d.segments.filter((s) => s.active).length;
   return (
     <section className="details" aria-label="Download details">
       <div className="details-head">
@@ -48,6 +72,11 @@ export function DetailsPane({ download: d }) {
           <span className={`pill pill-${d.status}`}>{STATUS_LABELS[d.status]}</span>
         </div>
         <div className="details-actions">
+          {d.status === 'auth-required' && (
+            <button type="button" className="btn btn-primary btn-small" onClick={onLogin}>
+              <Icon name="lock" size={15} /> Log in
+            </button>
+          )}
           <button type="button" className="btn btn-ghost" onClick={() => api.copy(d.url)} title="Copy address">
             <Icon name="copy" size={15} /> Copy URL
           </button>
@@ -62,7 +91,7 @@ export function DetailsPane({ download: d }) {
         </div>
       </div>
 
-      <SegmentMap key={d.id} download={d} />
+      {isStream ? <PieceMap key={d.id} download={d} /> : <SegmentMap key={d.id} download={d} />}
 
       <dl className="details-grid">
         <dt>Address</dt>
@@ -71,7 +100,7 @@ export function DetailsPane({ download: d }) {
         <dd className="mono ellipsis" title={d.savePath || ''}>{d.savePath || '—'}</dd>
         <dt>Downloaded</dt>
         <dd>
-          {formatBytes(d.downloadedBytes)} of {formatBytes(d.totalBytes)}
+          {formatBytes(d.downloadedBytes)} of {formatSize(d)}
           {p != null && ` (${p.toFixed(1)}%)`}
         </dd>
         <dt>Transfer rate</dt>
@@ -79,15 +108,40 @@ export function DetailsPane({ download: d }) {
         <dt>Time left</dt>
         <dd>{d.status === 'downloading' ? formatDuration(d.eta) || '—' : '—'}</dd>
         <dt>Connections</dt>
-        <dd>
-          {d.status === 'downloading' ? `${active} active of ${d.connections}` : `${d.connections} max`}
-        </dd>
-        <dt>Resume capability</dt>
-        <dd>{d.probed === false ? 'Not checked yet' : d.resumable ? 'Yes' : 'No'}</dd>
+        <dd>{d.status === 'downloading' ? `${active} active of ${d.connections}` : `${d.connections} max`}</dd>
+        {isStream ? (
+          <>
+            <dt>Stream</dt>
+            <dd className="ellipsis" title={streamSummary(d)}>{streamSummary(d)}</dd>
+          </>
+        ) : (
+          <>
+            <dt>Resume capability</dt>
+            <dd>{d.probed === false ? 'Not checked yet' : d.resumable ? 'Yes' : 'No'}</dd>
+          </>
+        )}
+        {d.hasLogin && (
+          <>
+            <dt>Login</dt>
+            <dd>Saved</dd>
+          </>
+        )}
         {d.error && (
           <>
-            <dt>Error</dt>
+            <dt>{d.status === 'auth-required' ? 'Server' : 'Error'}</dt>
             <dd className="error-text">{d.error}</dd>
+          </>
+        )}
+        {d.note && (
+          <>
+            <dt>Note</dt>
+            <dd className="note-text">{d.note}</dd>
+          </>
+        )}
+        {d.extraFiles?.length > 0 && (
+          <>
+            <dt>Also saved</dt>
+            <dd className="mono ellipsis" title={d.extraFiles.join('\n')}>{d.extraFiles.join(', ')}</dd>
           </>
         )}
       </dl>

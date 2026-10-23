@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { Icon } from '../icons.jsx';
-import { formatBytes, formatDate, formatDuration, formatSpeed, percent, statusText } from '../format.js';
+import { formatDate, formatDuration, formatSize, formatSpeed, percent, protocolLabel, statusText } from '../format.js';
 
 const COLUMNS = [
   { key: 'fileName', label: 'File Name', className: 'col-name' },
@@ -66,9 +66,10 @@ export function DownloadTable({ items, selected, onSelect, sort, onSort, onOpen,
                       <Icon name={d.category} size={16} />
                     </span>
                     <span className="file-name">{d.fileName || d.url}</span>
+                    {protocolLabel(d) && <span className="tag tag-small">{protocolLabel(d)}</span>}
                   </div>
                 </td>
-                <td className="col-num">{formatBytes(d.totalBytes)}</td>
+                <td className="col-num">{formatSize(d)}</td>
                 <td className="col-status">
                   <span className={`status-dot dot-${d.status}`} />
                   {statusText(d)}
@@ -76,8 +77,8 @@ export function DownloadTable({ items, selected, onSelect, sort, onSort, onOpen,
                 <td className="col-progress">
                   <div className={`bar bar-${d.status}`}>
                     <div
-                      className={`bar-fill ${p == null && d.status === 'downloading' ? 'bar-indeterminate' : ''}`}
-                      style={{ width: `${p ?? (d.status === 'downloading' ? 100 : 0)}%` }}
+                      className={`bar-fill ${(p == null && d.status === 'downloading') || d.status === 'merging' ? 'bar-indeterminate' : ''}`}
+                      style={{ width: `${d.status === 'merging' ? 100 : p ?? (d.status === 'downloading' ? 100 : 0)}%` }}
                     />
                   </div>
                 </td>

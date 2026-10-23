@@ -112,6 +112,22 @@ const PATHS = {
     </>
   ),
   bolt: <path d="M13 3L5 14h6l-1 7 8-11h-6z" />,
+  calendar: (
+    <>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
+      <path d="M3.5 10h17M8 3v4M16 3v4M12 13.5v3l2 1.2" />
+    </>
+  ),
+  lock: (
+    <>
+      <rect x="5" y="10.5" width="14" height="10" rx="2" />
+      <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3M12 14.5v2.5" />
+    </>
+  ),
+  puzzle: (
+    <path d="M10 4.5a2 2 0 1 1 4 0V6h3.5A1.5 1.5 0 0 1 19 7.5V11h-1.5a2 2 0 1 0 0 4H19v3.5a1.5 1.5 0 0 1-1.5 1.5H14v-1.5a2 2 0 1 0-4 0V20H6.5A1.5 1.5 0 0 1 5 18.5V15h1.5a2 2 0 1 0 0-4H5V7.5A1.5 1.5 0 0 1 6.5 6H10z" />
+  ),
+  power: <path d="M12 3v8M7.1 6.3a7.5 7.5 0 1 0 9.8 0" />,
 };
 
 export function Icon({ name, size = 18, className = '', strokeWidth = 1.8 }) {

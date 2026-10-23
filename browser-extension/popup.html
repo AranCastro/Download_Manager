@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Download Manager</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <img src="icons/icon-32.png" alt="" width="20" height="20" />
+      <h1>Download Manager</h1>
+      <span id="status" class="status">…</span>
+    </header>
+
+    <section id="offline" hidden>
+      <p>Download Manager is not running. Start the app, then open this panel again.</p>
+      <button type="button" id="retry">Check again</button>
+    </section>
+
+    <section id="unpaired" hidden>
+      <p>Connect this browser to Download Manager. The app asks you to approve the connection.</p>
+      <button type="button" id="pair" class="primary">Connect</button>
+      <p id="pair-note" class="muted" hidden>Waiting for approval in the Download Manager window…</p>
+    </section>
+
+    <section id="connected" hidden>
+      <h2>Media on this page</h2>
+      <ul id="media"></ul>
+      <p id="no-media" class="muted">No video or audio streams detected yet. Start playback, then reopen this panel.</p>
+
+      <details>
+        <summary>Settings</summary>
+        <label class="check"><input type="checkbox" id="capture" /> Send downloads of these file types to Download Manager</label>
+        <label class="check"><input type="checkbox" id="confirm" /> Confirm each download in the app first</label>
+        <label>File types<textarea id="types" rows="4" spellcheck="false"></textarea></label>
+        <label>Minimum size (KB)<input type="number" id="minSizeKB" min="0" /></label>
+        <label>Never capture on these sites<textarea id="skipHosts" rows="2" spellcheck="false" placeholder="example.org"></textarea></label>
+        <div class="row">
+          <button type="button" id="save" class="primary">Save</button>
+          <span id="saved" class="muted" hidden>Saved</span>
+          <button type="button" id="disconnect" class="link">Disconnect</button>
+        </div>
+      </details>
+    </section>
+
+    <p id="error" class="error" hidden></p>
+    <script src="popup.js"></script>
+  </body>
+</html>

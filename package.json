@@ -1,8 +1,8 @@
 {
   "name": "download-manager",
   "productName": "Download Manager",
-  "version": "1.0.0",
-  "description": "Multi-connection desktop download manager (Electron + React) with an MCP server for AI assistants.",
+  "version": "1.1.0",
+  "description": "Multi-connection desktop download manager (Electron + React) with FTP, HLS/DASH, scheduler, browser extension and an MCP server.",
   "author": "Dr Aran Castro <arancastro17@gmail.com>",
   "license": "MIT",
   "main": "electron/main.js",
@@ -10,12 +10,13 @@
     "dev": "node scripts/dev.mjs",
     "build:renderer": "vite build",
     "build:mcp": "node scripts/build-mcp.mjs",
-    "build": "npm run build:renderer && npm run build:mcp",
+    "build": "npm run build:renderer && npm run build:mcp && npm run build:extension",
     "start": "npm run build && electron .",
     "test": "node --test \"test/*.test.*\"",
     "mcp": "node mcp/server.mjs",
     "dist:win": "npm run build && electron-builder --win --x64 --publish never",
-    "dist": "npm run build && electron-builder --publish never"
+    "dist": "npm run build && electron-builder --publish never",
+    "build:extension": "node scripts/build-extension.mjs"
   },
   "build": {
     "appId": "online.draran.downloadmanager",
@@ -34,6 +35,10 @@
       {
         "from": "dist-mcp",
         "to": "mcp"
+      },
+      {
+        "from": "dist-extension",
+        "to": "browser-extension"
       }
     ],
     "win": {
@@ -76,9 +81,14 @@
     "electron": "45.0.0",
     "electron-builder": "26.15.3",
     "esbuild": "0.28.2",
+    "ftp-srv": "4.6.3",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "vite": "8.3.5",
     "zod": "4.6.7"
+  },
+  "dependencies": {
+    "basic-ftp": "6.2.3",
+    "fast-xml-parser": "5.11.2"
   }
 }

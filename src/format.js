@@ -35,26 +35,43 @@ export function formatDate(ms) {
 
 export function percent(d) {
   if (d.status === 'completed') return 100;
+  // Streams count finished segments; their byte total is only an estimate.
+  if (d.kind && d.kind !== 'file') return d.segmentsTotal ? (d.segmentsDone / d.segmentsTotal) * 100 : null;
   if (!d.totalBytes) return null;
   return Math.min(100, (d.downloadedBytes / d.totalBytes) * 100);
 }
 
+export const formatSize = (d) => `${d.sizeIsEstimate ? '~' : ''}${formatBytes(d.totalBytes)}`;
+
+export const KIND_LABELS = { hls: 'HLS', dash: 'DASH' };
+
+export function protocolLabel(d) {
+  if (KIND_LABELS[d.kind]) return KIND_LABELS[d.kind];
+  return /^ftps?:/i.test(d.url) ? 'FTP' : null;
+}
+
 export const STATUS_LABELS = {
   queued: 'Queued',
+  scheduled: 'Scheduled',
   connecting: 'Connecting…',
   downloading: 'Downloading',
+  merging: 'Merging…',
   paused: 'Stopped',
   completed: 'Complete',
   error: 'Error',
+  'auth-required': 'Login required',
 };
+
+export const ACTIVE = new Set(['connecting', 'downloading', 'merging']);
 
 export function statusText(d) {
   if (d.status === 'downloading') {
     const p = percent(d);
     return p == null ? formatBytes(d.downloadedBytes) : `${p.toFixed(1)}%`;
   }
-  if (d.status === 'paused' && d.downloadedBytes > 0 && d.totalBytes) {
-    return `Stopped · ${percent(d).toFixed(0)}%`;
+  const p = percent(d);
+  if ((d.status === 'paused' || d.status === 'scheduled') && d.downloadedBytes > 0 && p != null) {
+    return `${STATUS_LABELS[d.status]} · ${p.toFixed(0)}%`;
   }
   return STATUS_LABELS[d.status] || d.status;
 }

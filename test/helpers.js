@@ -65,6 +65,39 @@ async function startFileServer({ body, ranges = true, headers = {}, bytesPerSeco
   };
 }
 
+// A server whose behaviour is defined by the test: handler(req, res).
+async function startRouteServer(handler) {
+  const server = http.createServer((req, res) => {
+    Promise.resolve(handler(req, res)).catch((err) => {
+      res.writeHead(500);
+      res.end(String(err));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+  return {
+    url: (p) => `http://127.0.0.1:${port}${p}`,
+    close: () => {
+      server.closeAllConnections();
+      return new Promise((r) => server.close(r));
+    },
+  };
+}
+
+// Serves a buffer with Range support (used by route handlers).
+function sendBody(req, res, body, headers = {}) {
+  const range = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range || '');
+  if (range) {
+    const start = Number(range[1]);
+    const end = range[2] ? Math.min(Number(range[2]), body.length - 1) : body.length - 1;
+    res.writeHead(206, { ...headers, 'Content-Range': `bytes ${start}-${end}/${body.length}`, 'Content-Length': end - start + 1 });
+    res.end(body.subarray(start, end + 1));
+  } else {
+    res.writeHead(200, { ...headers, 'Content-Length': body.length });
+    res.end(body);
+  }
+}
+
 async function waitFor(check, timeoutMs = 20000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -74,4 +107,4 @@ async function waitFor(check, timeoutMs = 20000) {
   throw new Error('Timed out waiting for condition');
 }
 
-module.exports = { startFileServer, waitFor };
+module.exports = { startFileServer, startRouteServer, sendBody, waitFor };

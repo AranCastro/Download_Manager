@@ -1,7 +1,9 @@
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { execFile } = require('child_process');
 const {
   app,
   BrowserWindow,
@@ -11,35 +13,55 @@ const {
   clipboard,
   Notification,
   Menu,
+  safeStorage,
 } = require('electron');
 const { DownloadManager, readJson, writeJson } = require('./engine/DownloadManager');
 const { createApiServer, listen } = require('./api-server');
 const { looksLikeDownloadUrl, CATEGORIES } = require('./engine/utils');
+const { findFfmpeg } = require('./engine/ffmpeg');
+
+const POWER_COUNTDOWN_SECONDS = 60;
+const PAIR_TIMEOUT_MS = 120000;
 
 let mainWindow = null;
 let manager = null;
 let apiServer = null;
 let apiInfo = { port: null, token: null };
+let pairings = [];
+let powerTimer = null;
+const pendingPairs = new Map();
 
 // URLs passed on the command line, e.g. `"Download Manager.exe" https://...`.
-const urlArgs = (argv) => argv.filter((a) => /^https?:\/\//i.test(a));
+const urlArgs = (argv) => argv.filter((a) => /^(https?|ftps?):\/\//i.test(a));
+const userFile = (name) => path.join(app.getPath('userData'), name);
+const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
-    for (const url of urlArgs(argv)) send('dm:prompt-add', url);
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
+    const urls = urlArgs(argv);
+    if (urls.length) promptAdd(urls.map((url) => ({ url })));
+    showWindow();
   });
   app.whenReady().then(boot);
 }
 
+// Secrets are encrypted with the OS key store (DPAPI on Windows). Where none
+// is available (some Linux desktops) they are only base64-encoded.
+const encrypt = (text) =>
+  safeStorage.isEncryptionAvailable()
+    ? `v1:${safeStorage.encryptString(text).toString('base64')}`
+    : `b64:${Buffer.from(text).toString('base64')}`;
+const decrypt = (stored) =>
+  stored.startsWith('v1:')
+    ? safeStorage.decryptString(Buffer.from(stored.slice(3), 'base64'))
+    : Buffer.from(stored.slice(4), 'base64').toString('utf8');
+
 async function boot() {
   Menu.setApplicationMenu(null);
-  manager = await new DownloadManager({ dataDir: app.getPath('userData') }).init();
+  manager = await new DownloadManager({ dataDir: app.getPath('userData'), encrypt, decrypt }).init();
+  pairings = (await readJson(userFile('pairings.json'))) || [];
   await startApi();
 
   // Coalesce engine events into at most a few UI updates per second.
@@ -55,34 +77,124 @@ async function boot() {
   manager.on('progress', pushUpdate);
   manager.on('settings', (s) => send('dm:settings', s));
   manager.on('completed', (d) => {
-    if (manager.settings.notifyOnComplete && Notification.isSupported()) {
-      const note = new Notification({ title: 'Download complete', body: d.fileName });
-      note.on('click', () => shell.showItemInFolder(d.savePath));
-      note.show();
-    }
+    if (manager.settings.notifyOnComplete) notify('Download complete', d.fileName, () => shell.showItemInFolder(d.savePath));
   });
+  manager.on('auth-required', (d) => {
+    send('dm:auth-required', d);
+    if (!mainWindow?.isFocused()) notify('Login required', `${d.fileName} needs a user name and password`, showWindow);
+  });
+  manager.on('schedule-finished', startPowerCountdown);
 
   registerIpc();
   createWindow();
   startClipboardMonitor();
-  for (const url of urlArgs(process.argv)) {
-    mainWindow.webContents.once('did-finish-load', () => send('dm:prompt-add', url));
+  const urls = urlArgs(process.argv);
+  if (urls.length) {
+    mainWindow.webContents.once('did-finish-load', () => promptAdd(urls.map((url) => ({ url }))));
   }
+}
+
+function notify(title, body, onClick) {
+  if (!Notification.isSupported()) return;
+  const note = new Notification({ title, body });
+  if (onClick) note.on('click', onClick);
+  note.show();
 }
 
 // The API token is kept between runs so MCP client configs stay valid.
 async function startApi() {
-  const file = path.join(app.getPath('userData'), 'api.json');
-  const saved = await readJson(file);
+  const saved = await readJson(userFile('api.json'));
   const token = saved?.token || crypto.randomBytes(24).toString('hex');
-  apiServer = createApiServer(manager, { token });
+  apiServer = createApiServer(manager, {
+    token,
+    version: app.getVersion(),
+    isPairedToken: (candidate) => {
+      const hash = hashToken(candidate);
+      return pairings.some((p) => p.tokenHash === hash);
+    },
+    onPair: requestPairing,
+    onPrompt: promptAdd,
+  });
   try {
     const port = await listen(apiServer, manager.settings.apiPort);
     apiInfo = { port, token };
-    await writeJson(file, { port, token, pid: process.pid });
+    await writeJson(userFile('api.json'), { port, token, pid: process.pid });
   } catch (err) {
     console.error('Local API disabled:', err.message);
   }
+}
+
+// A browser extension asked to connect: the user approves it in the app,
+// then the extension receives its own token (only its hash is stored).
+function requestPairing({ origin, browser }) {
+  const key = origin || browser;
+  if (pendingPairs.has(key)) return pendingPairs.get(key).promise;
+  const requestId = crypto.randomUUID();
+  let settle;
+  const promise = new Promise((resolve) => (settle = resolve));
+  const timer = setTimeout(() => finish(false), PAIR_TIMEOUT_MS);
+  const finish = async (allow) => {
+    clearTimeout(timer);
+    pendingPairs.delete(key);
+    send('dm:pair-closed', requestId);
+    if (!allow) return settle(null);
+    const token = crypto.randomBytes(24).toString('hex');
+    pairings = pairings.filter((p) => p.origin !== origin || !origin);
+    pairings.push({ id: requestId, browser, origin, tokenHash: hashToken(token), createdAt: Date.now() });
+    await writeJson(userFile('pairings.json'), pairings);
+    settle(token);
+  };
+  pendingPairs.set(key, { promise, requestId, finish, browser, origin });
+  showWindow();
+  send('dm:pair-request', { requestId, browser, origin });
+  return promise;
+}
+
+function promptAdd(items) {
+  showWindow();
+  send('dm:prompt-add', { items });
+}
+
+// Countdown before quit / sleep / shutdown, which the user can cancel.
+function startPowerCountdown(action) {
+  if (!action || action === 'nothing') return;
+  clearTimeout(powerTimer);
+  showWindow();
+  send('dm:power-countdown', { action, seconds: POWER_COUNTDOWN_SECONDS });
+  powerTimer = setTimeout(() => performPowerAction(action), POWER_COUNTDOWN_SECONDS * 1000);
+}
+
+async function performPowerAction(action) {
+  powerTimer = null;
+  send('dm:power-countdown', null);
+  await manager.save();
+  const platform = process.platform;
+  const commands = {
+    sleep: {
+      win32: ['rundll32.exe', ['powrprof.dll,SetSuspendState', '0,1,0']],
+      darwin: ['pmset', ['sleepnow']],
+      linux: ['systemctl', ['suspend']],
+    },
+    shutdown: {
+      win32: ['shutdown', ['/s', '/t', '0']],
+      darwin: ['osascript', ['-e', 'tell app "System Events" to shut down']],
+      linux: ['systemctl', ['poweroff']],
+    },
+  };
+  if (action === 'quit') return app.quit();
+  const command = commands[action]?.[platform];
+  if (!command) return;
+  execFile(command[0], command[1], { windowsHide: true }, (err) => {
+    if (err) notify('Could not run the scheduled action', err.message);
+  });
+  if (action === 'shutdown') app.quit();
+}
+
+function showWindow() {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
 }
 
 function createWindow() {
@@ -125,6 +237,13 @@ function send(channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
 }
 
+function extensionFolder(browser) {
+  const root = app.isPackaged
+    ? path.join(process.resourcesPath, 'browser-extension')
+    : path.join(__dirname, '..', 'dist-extension');
+  return path.join(root, browser === 'firefox' ? 'firefox' : 'chromium');
+}
+
 function registerIpc() {
   const handle = (channel, fn) => ipcMain.handle(channel, (_event, ...args) => fn(...args));
 
@@ -133,6 +252,7 @@ function registerIpc() {
     settings: manager.settings,
     categories: CATEGORIES,
     version: app.getVersion(),
+    pendingPairs: [...pendingPairs.values()].map(({ requestId, browser, origin }) => ({ requestId, browser, origin })),
   }));
   handle('dm:add', (options) => manager.add(options));
   handle('dm:pause', (ids) => ids.forEach((id) => manager.pause(id)));
@@ -143,7 +263,26 @@ function registerIpc() {
     for (const id of ids) await manager.remove(id, { deleteFile });
   });
   handle('dm:remove-completed', () => manager.removeCompleted());
+  handle('dm:set-credentials', (id, login) => manager.setCredentials(id, login));
+  handle('dm:schedule', (ids) => manager.schedule(ids));
+  handle('dm:run-schedule', () => manager.runSchedule());
   handle('dm:update-settings', (patch) => manager.updateSettings(patch));
+  handle('dm:power-cancel', () => {
+    clearTimeout(powerTimer);
+    powerTimer = null;
+    send('dm:power-countdown', null);
+  });
+  handle('dm:pair-response', (requestId, allow) => {
+    const pending = [...pendingPairs.values()].find((p) => p.requestId === requestId);
+    pending?.finish(Boolean(allow));
+  });
+  handle('dm:pairings', () => pairings.map(({ tokenHash, ...p }) => p));
+  handle('dm:revoke-pairing', async (id) => {
+    pairings = pairings.filter((p) => p.id !== id);
+    await writeJson(userFile('pairings.json'), pairings);
+    return pairings.map(({ tokenHash, ...p }) => p);
+  });
+  handle('dm:check-ffmpeg', (bin) => findFfmpeg(bin ?? manager.settings.ffmpegPath));
   handle('dm:open-file', (id) => shell.openPath(manager.get(id).savePath));
   handle('dm:show-in-folder', (id) => {
     const d = manager.get(id);
@@ -151,6 +290,11 @@ function registerIpc() {
     else shell.openPath(d.savePath ? path.dirname(d.savePath) : manager.settings.downloadDir);
   });
   handle('dm:open-download-dir', () => shell.openPath(manager.settings.downloadDir));
+  handle('dm:open-extension-folder', (browser) => {
+    const folder = extensionFolder(browser);
+    return fs.existsSync(folder) ? shell.openPath(folder) : `Not found: ${folder}`;
+  });
+  handle('dm:extension-folder', (browser) => extensionFolder(browser));
   handle('dm:choose-directory', async (current) => {
     const result = await dialog.showOpenDialog(mainWindow, {
       defaultPath: current || manager.settings.downloadDir,
@@ -158,10 +302,19 @@ function registerIpc() {
     });
     return result.canceled ? null : result.filePaths[0];
   });
+  handle('dm:choose-file', async (current) => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      defaultPath: current || undefined,
+      properties: ['openFile'],
+      filters: process.platform === 'win32' ? [{ name: 'Programs', extensions: ['exe'] }] : [],
+    });
+    return result.canceled ? null : result.filePaths[0];
+  });
+  // Electron's clipboard API is asynchronous (W3C style).
   handle('dm:copy', (text) => clipboard.writeText(String(text)));
-  handle('dm:clipboard-url', () => {
-    const text = clipboard.readText().trim();
-    return /^https?:\/\//i.test(text) ? text : '';
+  handle('dm:clipboard-url', async () => {
+    const text = String((await clipboard.readText()) || '').trim();
+    return /^(https?|ftps?):\/\//i.test(text) ? text : '';
   });
   handle('dm:api-info', () => ({
     ...apiInfo,
@@ -174,14 +327,22 @@ function registerIpc() {
 }
 
 // Offers to download a link when one is copied, like browser-less IDM capture.
-function startClipboardMonitor() {
-  let last = clipboard.readText();
-  setInterval(() => {
-    if (!manager.settings.clipboardMonitor) return;
-    const text = clipboard.readText();
-    if (text === last) return;
-    last = text;
-    if (looksLikeDownloadUrl(text)) send('dm:prompt-add', text.trim());
+async function startClipboardMonitor() {
+  const read = async () => String((await clipboard.readText().catch(() => '')) || '');
+  let last = await read();
+  let busy = false;
+  setInterval(async () => {
+    if (!manager.settings.clipboardMonitor || busy) return;
+    busy = true;
+    try {
+      const text = await read();
+      if (text !== last) {
+        last = text;
+        if (looksLikeDownloadUrl(text)) promptAdd([{ url: text.trim() }]);
+      }
+    } finally {
+      busy = false;
+    }
   }, 1000).unref();
 }
 
@@ -190,6 +351,7 @@ app.on('before-quit', async (event) => {
   if (quitting || !manager) return;
   event.preventDefault();
   quitting = true;
+  clearTimeout(powerTimer);
   await manager.shutdown();
   apiServer?.close();
   app.quit();

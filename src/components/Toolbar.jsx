@@ -11,6 +11,7 @@ const BUTTONS = [
   { key: 'remove', label: 'Delete', icon: 'trash', title: 'Delete selected (Del)' },
   { key: 'removeCompleted', label: 'Delete Completed', icon: 'sweep' },
   { sep: true },
+  { key: 'scheduler', label: 'Scheduler', icon: 'calendar', always: true },
   { key: 'openFolder', label: 'Open Folder', icon: 'folder', always: true },
   { key: 'settings', label: 'Options', icon: 'gear', always: true },
 ];

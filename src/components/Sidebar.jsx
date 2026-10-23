@@ -21,7 +21,8 @@ export function Sidebar({ downloads, categories, view, onView }) {
       {item('all', 'All Downloads', 'all', downloads.length)}
       {categories.map((c) => item(`cat:${c}`, c, c, count((d) => d.category === c), true))}
       <div className="side-heading">Status</div>
-      {item('active', 'Active & Queued', 'download', count((d) => ['connecting', 'downloading', 'queued'].includes(d.status)))}
+      {item('active', 'Active & Queued', 'download', count((d) => ['connecting', 'downloading', 'merging', 'queued'].includes(d.status)))}
+      {item('scheduled', 'Scheduled', 'calendar', count((d) => d.status === 'scheduled'))}
       {item('unfinished', 'Unfinished', 'clock', count((d) => d.status !== 'completed'))}
       {item('finished', 'Finished', 'check', count((d) => d.status === 'completed'))}
     </nav>
