@@ -1,0 +1,6 @@
+node_modules/
+dist/
+dist-mcp/
+release/
+*.log
+.DS_Store
