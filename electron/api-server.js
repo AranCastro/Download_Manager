@@ -15,6 +15,7 @@ const crypto = require('crypto');
 //   POST   /api/downloads                add {url, fileName?, directory?, connections?, start?,
 //                                         schedule?, kind?, quality?, headers?, username?, password?}
 //   POST   /api/prompt                   open the Add dialog in the app {items: [{url, ...}]}
+//   POST   /api/probe                    inspect a URL without downloading {url, kind?, headers?, username?, password?}
 //   GET    /api/downloads/:id            one download
 //   POST   /api/downloads/:id/pause      pause
 //   POST   /api/downloads/:id/resume     resume / retry
@@ -41,6 +42,7 @@ function createApiServer(manager, { token, isPairedToken = () => false, onPair, 
   const id = '([\\w-]+)';
   const routes = [
     ['GET', '/api/downloads', () => manager.list()],
+    ['POST', '/api/probe', (_m, body) => manager.probe(body)],
     ['POST', '/api/downloads', (_m, body) => manager.add(body)],
     [
       'POST',

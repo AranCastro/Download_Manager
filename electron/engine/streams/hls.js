@@ -132,9 +132,13 @@ function checkMedia(playlist) {
 // the playlist body.
 async function resolveHls(url, fetchText, quality) {
   const root = parsePlaylist(await fetchText(url), url);
+  const durationOf = (segments) => segments.reduce((sum, s) => sum + s.duration, 0);
   if (root.type === 'media') {
     checkMedia(root);
-    return { info: {}, tracks: [{ type: 'main', segments: root.segments, ext: trackExtension(root.segments) }] };
+    return {
+      info: { duration: durationOf(root.segments) },
+      tracks: [{ type: 'main', segments: root.segments, ext: trackExtension(root.segments) }],
+    };
   }
   const variant = selectVariant(root.variants, quality);
   const video = parsePlaylist(await fetchText(variant.uri), variant.uri);
@@ -152,7 +156,7 @@ async function resolveHls(url, fetchText, quality) {
     }
   }
   return {
-    info: { width: variant.width, height: variant.height, bandwidth: variant.bandwidth },
+    info: { width: variant.width, height: variant.height, bandwidth: variant.bandwidth, duration: durationOf(video.segments) },
     tracks,
   };
 }
@@ -168,4 +172,24 @@ function segmentIv(segment) {
   return iv;
 }
 
-module.exports = { parsePlaylist, parseAttributes, selectVariant, resolveHls, segmentIv };
+// What the Add dialog shows before a stream is downloaded: the qualities on
+// offer, the duration and whether audio comes as a separate track.
+async function probeHls(url, fetchText) {
+  const root = parsePlaylist(await fetchText(url), url);
+  let media = root;
+  let qualities = [];
+  let separateAudio = false;
+  if (root.type === 'master') {
+    qualities = [...new Map(root.variants.filter((v) => v.height).map((v) => [v.height, v])).values()]
+      .sort((a, b) => b.height - a.height)
+      .map((v) => ({ height: v.height, width: v.width, bandwidth: v.bandwidth }));
+    const best = selectVariant(root.variants);
+    separateAudio = Boolean(best.audio && root.media.some((m) => m.type === 'AUDIO' && m.groupId === best.audio && m.uri));
+    media = parsePlaylist(await fetchText(best.uri), best.uri);
+  }
+  checkMedia(media);
+  const duration = media.segments.reduce((sum, s) => sum + s.duration, 0);
+  return { qualities, duration, segments: media.segments.length, separateAudio };
+}
+
+module.exports = { parsePlaylist, parseAttributes, selectVariant, resolveHls, segmentIv, probeHls };

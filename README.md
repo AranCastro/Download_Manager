@@ -2,7 +2,27 @@
 
 A Windows desktop download manager modelled on Internet Download Manager (IDM). It is built with Electron and React. It has a browser extension for Chrome, Edge and Firefox, and a Model Context Protocol (MCP) server through which Claude, or any other MCP client, can queue and control downloads.
 
-![Main window](docs/screenshot.png)
+![Main window, light theme](docs/screenshot.png)
+
+<details>
+<summary>Dark theme</summary>
+
+![Main window, dark theme](docs/screenshot-dark.png)
+
+</details>
+
+## Interface
+
+| Area | What it offers |
+| --- | --- |
+| Window | Custom title bar with the native Windows buttons, light, dark or system theme, six accent colours |
+| Download list | Two-line rows with progress, speed, time left and source; hover actions (pause or resume, open, folder, more); a compact table view; sorting; search from the title bar |
+| Add dialog | Checks a link while you type: real file name, size and resume support, or for streams the qualities and duration; detects servers that need a sign-in; batches show each link's name and size |
+| Details pane | Overview with a segment map, a table of connections (or stream tracks) and a speed graph with hover readout |
+| Sidebar | Library and category views with counts, a *Needs attention* view, and a live throughput graph with today's total |
+| Shortcuts | Command palette (Ctrl+K), Ctrl+V anywhere to add copied links, drag links or a `.txt` list onto the window, Space to pause or resume, `?` for the full list |
+| Feedback | Toasts for completed and failed downloads with Open, Show in folder and Retry; overall progress on the taskbar button; a tray icon with quick actions; optional close-to-tray |
+| Status bar | Active, queued and scheduled counts; speed-limit presets; scheduler window; total speed |
 
 ## Features
 
@@ -19,7 +39,7 @@ A Windows desktop download manager modelled on Internet Download Manager (IDM). 
 | Queue and speed limit | A set number of downloads run at once, and a global speed limit in KB/s applies to all connections. |
 | Categories | Files are sorted into Compressed, Documents, Music, Programs, Video and Other, optionally into a sub-folder for each category. |
 | Clipboard capture | Copying a direct file link opens the Add dialog with that link. |
-| MCP server | 15 tools for downloads, logins, the scheduler and settings. |
+| MCP server | 16 tools for checking links, downloads, logins, the scheduler and settings. |
 
 ## Download the `.exe`
 
@@ -76,6 +96,7 @@ Live streams, and streams protected by DRM (Widevine, PlayReady, FairPlay, HLS S
 
 | Tool | Purpose |
 | --- | --- |
+| `probe_url` | Check a link without downloading it: name, size, resume support, stream qualities and duration. |
 | `add_download` | Queue a file, FTP link or `.m3u8`/`.mpd` stream. Optional inputs: file name, folder, connections, quality, login, extra headers, start now or schedule. |
 | `list_downloads` / `get_download` | Report status, progress, speed and segments. |
 | `pause_download` / `resume_download` / `pause_all` / `resume_all` | Stop or continue downloads. Resuming a failed download retries it. |
@@ -98,6 +119,7 @@ The REST API listens on `127.0.0.1` only. A request with a web-page `Origin` hea
 Endpoints:
 
 - `GET|POST /api/downloads`
+- `POST /api/probe`
 - `GET|DELETE /api/downloads/:id`
 - `POST /api/downloads/:id/pause|resume|schedule|credentials`
 - `POST /api/prompt` (opens the Add dialog)
@@ -115,7 +137,7 @@ Requirements: Node.js 20 or later. FFmpeg is optional; the tests that need it ar
 ```bash
 npm install
 npm run dev        # Vite dev server + Electron with hot reload
-npm test           # 28 tests: engine, HTTP auth, FTP, HLS/DASH, scheduler, API, MCP
+npm test           # 29 tests: engine, HTTP auth, FTP, HLS/DASH, probing, scheduler, API, MCP
 npm run build      # renderer, MCP bundle, browser extension (dist-extension/)
 npm run dist:win   # Windows installer and portable exe in release/
 ```

@@ -32,6 +32,10 @@ export function createMockApi() {
     notifyOnComplete: true,
     apiPort: 6801,
     ffmpegPath: '',
+    theme: 'system',
+    accent: 'blue',
+    density: 'comfortable',
+    closeToTray: false,
     schedule: { enabled: true, startTime: '02:00', stopTime: '07:00', days: [1, 2, 3, 4, 5], afterDone: 'nothing' },
   };
   let seq = 0;
@@ -206,6 +210,26 @@ export function createMockApi() {
     respondPair: async (requestId) => listeners.pairClosed.forEach((fn) => fn(requestId)),
     pairings: async () => [{ id: 'p1', browser: 'Microsoft Edge', origin: 'chrome-extension://abc', createdAt: Date.now() - 86400000 }],
     revokePairing: async () => [],
+    probe: async ({ url }) => {
+      await new Promise((r) => setTimeout(r, 700));
+      const name = decodeURIComponent(new URL(url).pathname.split('/').pop() || 'download');
+      if (/secure|portal/.test(url)) return { url, kind: 'file', authRequired: true, realm: 'Data portal', error: 'Login required' };
+      if (/\.m3u8$/.test(name)) {
+        return {
+          url,
+          kind: 'hls',
+          fileName: 'lecture.mp4',
+          category: 'Video',
+          qualities: [1080, 720, 480, 360].map((height, i) => ({ height, bandwidth: [5.2e6, 2.8e6, 1.4e6, 0.8e6][i] })),
+          duration: 2843,
+          segments: 474,
+          separateAudio: true,
+        };
+      }
+      return { url, kind: 'file', fileName: name, totalBytes: 734_003_200, resumable: true, category: categoryOf(name) };
+    },
+    platform: async () => 'win32',
+    setTitleBar: async () => {},
     checkFfmpeg: async () => ({ path: 'ffmpeg', version: 'ffmpeg version 7.1 (preview)' }),
     openExtensionFolder: async () => {},
     extensionFolder: async (browser) => `C:\\Program Files\\Download Manager\\resources\\browser-extension\\${browser}`,

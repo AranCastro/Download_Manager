@@ -299,3 +299,39 @@ test('real DASH without FFmpeg keeps playable video and audio files', { skip: !H
   assert.deepEqual(probe(d.extraFiles[0]).types, ['audio']);
   await manager.shutdown();
 });
+
+test('probe reports stream qualities and duration, file size, and login needs', async (t) => {
+  const { routes } = syntheticHls();
+  routes.set('/files/report.pdf', crypto.randomBytes(5000));
+  const server = await serveRoutes(routes);
+  const secure = await startRouteServer((req, res) => {
+    res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="Portal"' });
+    res.end();
+  });
+  const manager = await makeManager();
+  t.after(async () => {
+    await server.close();
+    await secure.close();
+  });
+
+  const hls = await manager.probe({ url: server.url('/v/master.m3u8') });
+  assert.deepEqual(hls.qualities.map((q) => q.height), [720, 360]);
+  assert.equal(hls.duration, 24);
+  assert.equal(hls.segments, 12);
+  assert.equal(hls.kind, 'hls');
+
+  const file = await manager.probe({ url: server.url('/files/report.pdf') });
+  assert.deepEqual(
+    { name: file.fileName, size: file.totalBytes, resumable: file.resumable, category: file.category },
+    { name: 'report.pdf', size: 5000, resumable: true, category: 'Documents' },
+  );
+
+  const locked = await manager.probe({ url: secure.url('/dem.tif') });
+  assert.equal(locked.authRequired, true);
+  assert.equal(locked.realm, 'Portal');
+
+  const missing = await manager.probe({ url: server.url('/nope.zip') });
+  assert.match(missing.error, /404/);
+  assert.equal(manager.list().length, 0);
+  await manager.shutdown();
+});

@@ -13,6 +13,9 @@ const {
   clipboard,
   Notification,
   Menu,
+  Tray,
+  nativeImage,
+  nativeTheme,
   safeStorage,
 } = require('electron');
 const { DownloadManager, readJson, writeJson } = require('./engine/DownloadManager');
@@ -29,7 +32,12 @@ let apiServer = null;
 let apiInfo = { port: null, token: null };
 let pairings = [];
 let powerTimer = null;
+let tray = null;
+let quitting = false;
 const pendingPairs = new Map();
+const ICON = path.join(__dirname, '..', 'build', 'icon.png');
+// Height of the custom title bar; the native window buttons are drawn over it.
+const TITLEBAR_HEIGHT = 44;
 
 // URLs passed on the command line, e.g. `"Download Manager.exe" https://...`.
 const urlArgs = (argv) => argv.filter((a) => /^(https?|ftps?):\/\//i.test(a));
@@ -75,6 +83,8 @@ async function boot() {
   };
   manager.on('changed', pushUpdate);
   manager.on('progress', pushUpdate);
+  manager.on('changed', updateTaskbar);
+  manager.on('progress', updateTaskbar);
   manager.on('settings', (s) => send('dm:settings', s));
   manager.on('completed', (d) => {
     if (manager.settings.notifyOnComplete) notify('Download complete', d.fileName, () => shell.showItemInFolder(d.savePath));
@@ -87,6 +97,7 @@ async function boot() {
 
   registerIpc();
   createWindow();
+  createTray();
   startClipboardMonitor();
   const urls = urlArgs(process.argv);
   if (urls.length) {
@@ -197,15 +208,31 @@ function showWindow() {
   mainWindow.focus();
 }
 
+function isDark() {
+  const theme = manager.settings.theme;
+  return theme === 'dark' || (theme === 'system' && nativeTheme.shouldUseDarkColors);
+}
+
+// Colours of the native window buttons; the renderer sends exact values
+// whenever the theme or accent changes.
+function titleBarColours(dark = isDark()) {
+  return dark ? { color: '#14161b', symbolColor: '#e6e9ee' } : { color: '#eef0f4', symbolColor: '#1c2129' };
+}
+
 function createWindow() {
+  const dark = isDark();
   mainWindow = new BrowserWindow({
-    width: 1180,
-    height: 720,
-    minWidth: 820,
-    minHeight: 480,
+    width: 1240,
+    height: 760,
+    minWidth: 860,
+    minHeight: 520,
     title: 'Download Manager',
-    backgroundColor: '#f3f4f6',
-    icon: path.join(__dirname, '..', 'build', 'icon.png'),
+    backgroundColor: titleBarColours(dark).color,
+    icon: ICON,
+    titleBarStyle: 'hidden',
+    ...(process.platform === 'darwin'
+      ? { trafficLightPosition: { x: 16, y: 15 } }
+      : { titleBarOverlay: { ...titleBarColours(dark), height: TITLEBAR_HEIGHT } }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -228,9 +255,62 @@ function createWindow() {
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (url !== mainWindow.webContents.getURL()) event.preventDefault();
   });
+  // "Close to tray": the window hides and downloads continue.
+  mainWindow.on('close', (event) => {
+    if (!quitting && manager.settings.closeToTray && tray) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+}
+
+function createTray() {
+  const size = process.platform === 'win32' ? 16 : 22;
+  tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: size, height: size }));
+  tray.setToolTip('Download Manager');
+  tray.on('click', showWindow);
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Open Download Manager', click: showWindow },
+      {
+        label: 'Add link from clipboard',
+        click: async () => {
+          const text = String((await clipboard.readText().catch(() => '')) || '').trim();
+          promptAdd(/^(https?|ftps?):\/\//i.test(text) ? [{ url: text }] : []);
+        },
+      },
+      { type: 'separator' },
+      { label: 'Resume all', click: () => manager.resumeAll() },
+      { label: 'Pause all', click: () => manager.pauseAll() },
+      { type: 'separator' },
+      { label: 'Quit', click: () => app.quit() },
+    ]),
+  );
+}
+
+// Overall progress on the taskbar button and in the tray tooltip.
+let lastTaskbar = 0;
+function updateTaskbar() {
+  const now = Date.now();
+  if (now - lastTaskbar < 500 || !mainWindow) return;
+  lastTaskbar = now;
+  const active = manager.list().filter((d) => ['connecting', 'downloading', 'merging'].includes(d.status));
+  const speed = active.reduce((sum, d) => sum + (d.speed || 0), 0);
+  if (!active.length) {
+    mainWindow.setProgressBar(-1);
+    tray?.setToolTip('Download Manager');
+    return;
+  }
+  const known = active.filter((d) => d.totalBytes);
+  const total = known.reduce((sum, d) => sum + d.totalBytes, 0);
+  const done = known.reduce((sum, d) => sum + Math.min(d.downloadedBytes, d.totalBytes), 0);
+  if (total) mainWindow.setProgressBar(done / total);
+  else mainWindow.setProgressBar(2, { mode: 'indeterminate' });
+  const mb = (speed / 1048576).toFixed(1);
+  tray?.setToolTip(`Download Manager — ${active.length} active, ${mb} MB/s`);
 }
 
 function send(channel, payload) {
@@ -283,6 +363,14 @@ function registerIpc() {
     return pairings.map(({ tokenHash, ...p }) => p);
   });
   handle('dm:check-ffmpeg', (bin) => findFfmpeg(bin ?? manager.settings.ffmpegPath));
+  handle('dm:probe', (options) => manager.probe(options));
+  handle('dm:platform', () => process.platform);
+  handle('dm:titlebar', (colours) => {
+    if (process.platform !== 'darwin' && mainWindow && colours?.color) {
+      mainWindow.setTitleBarOverlay({ color: colours.color, symbolColor: colours.symbolColor, height: TITLEBAR_HEIGHT });
+      mainWindow.setBackgroundColor(colours.color);
+    }
+  });
   handle('dm:open-file', (id) => shell.openPath(manager.get(id).savePath));
   handle('dm:show-in-folder', (id) => {
     const d = manager.get(id);
@@ -346,7 +434,6 @@ async function startClipboardMonitor() {
   }, 1000).unref();
 }
 
-let quitting = false;
 app.on('before-quit', async (event) => {
   if (quitting || !manager) return;
   event.preventDefault();
@@ -354,6 +441,7 @@ app.on('before-quit', async (event) => {
   clearTimeout(powerTimer);
   await manager.shutdown();
   apiServer?.close();
+  tray?.destroy();
   app.quit();
 });
 

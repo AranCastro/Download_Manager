@@ -5,11 +5,15 @@ const path = require('path');
 const os = require('os');
 const { EventEmitter } = require('events');
 const { Download } = require('./Download');
-const { StreamDownload } = require('./streams/StreamDownload');
+const { StreamDownload, streamBaseName } = require('./streams/StreamDownload');
+const { probeHls } = require('./streams/hls');
+const { probeDash } = require('./streams/dash');
+const { HttpError, request, describeError } = require('./http');
 const { RateLimiter } = require('./RateLimiter');
 const { CredentialStore, siteKey } = require('./CredentialStore');
 const { Scheduler, DEFAULT_SCHEDULE, normaliseSchedule } = require('./Scheduler');
 const { findFfmpeg } = require('./ffmpeg');
+const { categorise } = require('./utils');
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
@@ -26,7 +30,16 @@ const DEFAULT_SETTINGS = {
   apiPort: 6801,
   ffmpegPath: '',
   schedule: DEFAULT_SCHEDULE,
+  // Appearance and window behaviour (used by the UI and the main process).
+  theme: 'system',
+  accent: 'blue',
+  density: 'comfortable',
+  closeToTray: false,
 };
+
+const THEMES = ['system', 'light', 'dark'];
+const ACCENTS = ['blue', 'violet', 'teal', 'green', 'orange', 'rose'];
+const DENSITIES = ['comfortable', 'compact'];
 
 const LIMITS = {
   maxConcurrent: [1, 20],
@@ -141,10 +154,8 @@ class DownloadManager extends EventEmitter {
     return this;
   }
 
-  create(data) {
-    return data.kind === 'hls' || data.kind === 'dash'
-      ? new StreamDownload(data, this.ctx)
-      : new Download(data, this.ctx);
+  create(data, ctx = this.ctx) {
+    return data.kind === 'hls' || data.kind === 'dash' ? new StreamDownload(data, ctx) : new Download(data, ctx);
   }
 
   attach(download) {
@@ -164,7 +175,8 @@ class DownloadManager extends EventEmitter {
     });
   }
 
-  add({ url, fileName, directory, connections, headers, start = true, schedule = false, kind, quality, username, password } = {}) {
+  // Validates a URL; credentials embedded in it are split off.
+  parseTarget(url, kind) {
     let parsed;
     try {
       parsed = new URL(String(url || '').trim());
@@ -176,10 +188,54 @@ class DownloadManager extends EventEmitter {
     if (detected !== 'file' && !parsed.protocol.startsWith('http')) {
       throw new Error('HLS and DASH streams must use http or https');
     }
-    // Credentials in the URL are moved to the encrypted store.
-    const urlLogin = parsed.username ? { username: decodeURIComponent(parsed.username), password: decodeURIComponent(parsed.password) } : null;
+    const urlLogin = parsed.username
+      ? { username: decodeURIComponent(parsed.username), password: decodeURIComponent(parsed.password) }
+      : null;
     parsed.username = '';
     parsed.password = '';
+    return { parsed, detected, urlLogin };
+  }
+
+  // Looks at a URL without downloading it: name, size, resumability, and for
+  // streams the available qualities and duration. Never throws for server
+  // answers; problems come back as { error } or { authRequired }.
+  async probe({ url, kind, headers, username, password } = {}) {
+    const { parsed, detected, urlLogin } = this.parseTarget(url, kind);
+    const login = username ? { username: String(username), password: String(password ?? '') } : urlLogin;
+    const ctx = {
+      ...this.ctx,
+      credentialsFor: (d) => login || this.ctx.credentialsFor(d),
+    };
+    const draft = this.create({ url: parsed.href, kind: detected, headers: cleanHeaders(headers) }, ctx);
+    const signal = AbortSignal.timeout(20000);
+    const base = { url: parsed.href, kind: detected };
+    try {
+      if (detected === 'file') {
+        const info = await draft.transport.probe(draft, signal);
+        return {
+          ...base,
+          fileName: info.fileName,
+          totalBytes: info.totalBytes,
+          resumable: info.resumable,
+          category: categorise(info.fileName),
+        };
+      }
+      const fetchText = async (u) => {
+        const res = await request(u, { headers: draft.requestHeaders(), signal, auth: draft.auth });
+        if (!res.ok) throw new HttpError(res.status, res.statusText);
+        return res.text();
+      };
+      const info = await (detected === 'dash' ? probeDash : probeHls)(parsed.href, fetchText);
+      return { ...base, ...info, fileName: `${streamBaseName(parsed.href)}.mp4`, category: 'Video', resumable: true };
+    } catch (err) {
+      if (err.authRequired) return { ...base, authRequired: true, realm: err.realm, error: err.message };
+      return { ...base, error: err.name === 'TimeoutError' ? 'The server did not answer in time' : describeError(err) };
+    }
+  }
+
+  add({ url, fileName, directory, connections, headers, start = true, schedule = false, kind, quality, username, password } = {}) {
+    // Credentials in the URL are moved to the encrypted store.
+    const { parsed, detected, urlLogin } = this.parseTarget(url, kind);
 
     const download = this.create({
       url: parsed.href,
@@ -355,6 +411,10 @@ class DownloadManager extends EventEmitter {
     s.notifyOnComplete = Boolean(s.notifyOnComplete);
     s.ffmpegPath = String(s.ffmpegPath || '').trim();
     s.schedule = normaliseSchedule(s.schedule);
+    s.theme = THEMES.includes(s.theme) ? s.theme : 'system';
+    s.accent = ACCENTS.includes(s.accent) ? s.accent : 'blue';
+    s.density = DENSITIES.includes(s.density) ? s.density : 'comfortable';
+    s.closeToTray = Boolean(s.closeToTray);
     return s;
   }
 

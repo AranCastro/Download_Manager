@@ -53,10 +53,17 @@ test('MCP tools drive the download manager through the local API', async (t) => 
     tools.map((x) => x.name).sort(),
     [
       'add_download', 'get_download', 'get_scheduler', 'get_settings', 'list_downloads', 'pause_all',
-      'pause_download', 'remove_download', 'resume_all', 'resume_download', 'run_scheduler_now',
+      'pause_download', 'probe_url', 'remove_download', 'resume_all', 'resume_download', 'run_scheduler_now',
       'schedule_download', 'set_credentials', 'update_scheduler', 'update_settings',
     ],
   );
+
+  const probed = parse(await client.callTool({ name: 'probe_url', arguments: { url: files.url('/video.mp4') } }));
+  assert.deepEqual(
+    { fileName: probed.fileName, size: probed.size, resumable: probed.resumable, category: probed.category },
+    { fileName: 'video.mp4', size: '2.0 MB', resumable: true, category: 'Video' },
+  );
+  assert.equal(manager.list().length, 0, 'probing must not add a download');
 
   const added = parse(
     await client.callTool({ name: 'add_download', arguments: { url: files.url('/video.mp4') } }),

@@ -141,6 +141,31 @@ server.registerTool(
 );
 
 server.registerTool(
+  'probe_url',
+  {
+    title: 'Inspect URL',
+    description:
+      'Check a link before downloading it: file name, size, whether it can resume, and for ' +
+      'HLS/DASH streams the available qualities and the duration. Nothing is downloaded.',
+    inputSchema: {
+      url: z.string().url(),
+      kind: z.enum(['file', 'hls', 'dash']).optional(),
+      username: z.string().optional(),
+      password: z.string().optional(),
+    },
+  },
+  tool(async (args) => {
+    const info = await api('POST', '/api/probe', args);
+    return {
+      ...info,
+      size: info.totalBytes != null ? formatBytes(info.totalBytes) : undefined,
+      durationSeconds: info.duration != null ? Math.round(info.duration) : undefined,
+      qualities: info.qualities?.map((q) => `${q.height}p`),
+    };
+  }),
+);
+
+server.registerTool(
   'list_downloads',
   {
     title: 'List downloads',

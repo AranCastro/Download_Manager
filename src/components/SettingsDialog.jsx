@@ -2,8 +2,75 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { Icon } from '../icons.jsx';
 import { Modal } from './Modal.jsx';
+import { ACCENTS } from '../theme.js';
+
+// Applied at once (no Save needed), so the user sees the result while choosing.
+const APPEARANCE_KEYS = ['theme', 'accent', 'density', 'closeToTray'];
+
+function AppearanceTab({ settings }) {
+  const set = (patch) => api.updateSettings(patch);
+  return (
+    <div className="tab-panel">
+      <div className="field">
+        <span>Theme</span>
+        <div className="choice-row">
+          {[
+            ['system', 'System', 'monitor'],
+            ['light', 'Light', 'sun'],
+            ['dark', 'Dark', 'moon'],
+          ].map(([value, label, icon]) => (
+            <button key={value} type="button" className={`choice ${settings.theme === value ? 'is-on' : ''}`} aria-pressed={settings.theme === value} onClick={() => set({ theme: value })}>
+              <span className={`theme-preview theme-preview-${value}`} aria-hidden="true">
+                <span />
+                <span />
+              </span>
+              <span className="choice-label">
+                <Icon name={icon} size={15} /> {label}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="field">
+        <span>Accent colour</span>
+        <div className="swatches" role="radiogroup" aria-label="Accent colour">
+          {Object.entries(ACCENTS).map(([key, a]) => (
+            <button
+              key={key}
+              type="button"
+              role="radio"
+              aria-checked={settings.accent === key}
+              className={`swatch ${settings.accent === key ? 'is-on' : ''}`}
+              style={{ '--swatch': document.documentElement.dataset.theme === 'dark' ? a.dark : a.light }}
+              onClick={() => set({ accent: key })}
+              title={a.label}
+            >
+              {settings.accent === key && <Icon name="check" size={14} strokeWidth={3} />}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="field">
+        <span>Download list</span>
+        <div className="segmented segmented-wide" role="group" aria-label="Density">
+          <button type="button" className={settings.density === 'comfortable' ? 'is-on' : ''} onClick={() => set({ density: 'comfortable' })}>
+            <Icon name="rows" size={15} /> Comfortable
+          </button>
+          <button type="button" className={settings.density === 'compact' ? 'is-on' : ''} onClick={() => set({ density: 'compact' })}>
+            <Icon name="list" size={15} /> Compact table
+          </button>
+        </div>
+      </div>
+      <label className="check">
+        <input type="checkbox" checked={settings.closeToTray} onChange={(e) => set({ closeToTray: e.target.checked })} />
+        Keep downloading in the system tray when the window is closed
+      </label>
+    </div>
+  );
+}
 
 const TABS = [
+  ['appearance', 'Appearance'],
   ['general', 'General'],
   ['connection', 'Connection'],
   ['browser', 'Browser'],
@@ -117,8 +184,8 @@ function BrowserTab() {
   );
 }
 
-export function SettingsDialog({ settings, onClose }) {
-  const [tab, setTab] = useState('general');
+export function SettingsDialog({ settings, onClose, initialTab = 'appearance' }) {
+  const [tab, setTab] = useState(initialTab);
   const [draft, setDraft] = useState(settings);
   const [info, setInfo] = useState(null);
   const [copied, setCopied] = useState('');
@@ -133,7 +200,8 @@ export function SettingsDialog({ settings, onClose }) {
   };
 
   const save = async () => {
-    await api.updateSettings(draft);
+    const patch = Object.fromEntries(Object.entries(draft).filter(([key]) => !APPEARANCE_KEYS.includes(key)));
+    await api.updateSettings(patch);
     onClose();
   };
 
@@ -186,6 +254,8 @@ export function SettingsDialog({ settings, onClose }) {
           </button>
         ))}
       </div>
+
+      {tab === 'appearance' && <AppearanceTab settings={settings} />}
 
       {tab === 'general' && (
         <div className="tab-panel">

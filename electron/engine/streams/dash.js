@@ -167,11 +167,34 @@ function resolveDashManifest(xml, manifestUrl, quality = 'best') {
   }
   if (!tracks.length) throw new Error('The DASH manifest has no audio or video');
   if (tracks.length === 1) tracks[0].type = 'main';
-  return { info, tracks };
+  return { info: { ...info, duration: periodDuration }, tracks };
 }
 
 async function resolveDash(url, fetchText, quality) {
   return resolveDashManifest(await fetchText(url), url, quality);
 }
 
-module.exports = { resolveDash, resolveDashManifest, parseDuration, fillTemplate };
+async function probeDash(url, fetchText) {
+  const xml = await fetchText(url);
+  const plan = resolveDashManifest(xml, url);
+  const mpd = parser.parse(xml).MPD;
+  const period = mpd.Period[0];
+  const heights = new Map();
+  for (const set of period.AdaptationSet || []) {
+    if (contentTypeOf(set) !== 'video') continue;
+    for (const rep of set.Representation || []) {
+      const height = Number(rep.height);
+      if (height && !heights.has(height)) {
+        heights.set(height, { height, width: Number(rep.width) || null, bandwidth: Number(rep.bandwidth) || 0 });
+      }
+    }
+  }
+  return {
+    qualities: [...heights.values()].sort((a, b) => b.height - a.height),
+    duration: parseDuration(period.duration) ?? parseDuration(mpd.mediaPresentationDuration),
+    segments: plan.tracks.reduce((n, t) => n + t.segments.length, 0),
+    separateAudio: plan.tracks.length > 1,
+  };
+}
+
+module.exports = { resolveDash, resolveDashManifest, parseDuration, fillTemplate, probeDash };
