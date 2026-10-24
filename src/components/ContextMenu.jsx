@@ -21,8 +21,9 @@ export function ContextMenu({ x, y, download, selectionSize, actions, onClose })
     onClose();
   };
   const isDone = download.status === 'completed';
-  const canResume = download.status === 'paused' || download.status === 'error';
-  const canStop = ['queued', 'connecting', 'downloading'].includes(download.status);
+  const canResume = ['paused', 'error', 'scheduled'].includes(download.status);
+  const canStop = ['queued', 'connecting', 'downloading', 'merging'].includes(download.status);
+  const canSchedule = !isDone && download.status !== 'scheduled';
 
   return (
     <div className="menu" ref={ref} style={pos} role="menu" onClick={(e) => e.stopPropagation()}>
@@ -30,6 +31,10 @@ export function ContextMenu({ x, y, download, selectionSize, actions, onClose })
       {single && <button role="menuitem" onClick={run(() => api.showInFolder(download.id))}>Open folder</button>}
       {(canResume || !single) && <button role="menuitem" onClick={run(actions.resume)}>Resume</button>}
       {(canStop || !single) && <button role="menuitem" onClick={run(actions.stop)}>Stop</button>}
+      {(canSchedule || !single) && <button role="menuitem" onClick={run(actions.schedule)}>Add to schedule</button>}
+      {single && download.status === 'auth-required' && (
+        <button role="menuitem" onClick={run(actions.login)}>Log in…</button>
+      )}
       {single && <button role="menuitem" onClick={run(() => api.copy(download.url))}>Copy address</button>}
       <hr />
       <button role="menuitem" className="danger" onClick={run(actions.remove)}>

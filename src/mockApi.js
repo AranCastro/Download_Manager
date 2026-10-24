@@ -13,7 +13,15 @@ function categoryOf(name) {
 }
 
 export function createMockApi() {
-  const listeners = { update: new Set(), settings: new Set(), prompt: new Set() };
+  const listeners = {
+    update: new Set(),
+    settings: new Set(),
+    prompt: new Set(),
+    auth: new Set(),
+    pair: new Set(),
+    pairClosed: new Set(),
+    power: new Set(),
+  };
   let settings = {
     downloadDir: 'C:\\Users\\you\\Downloads',
     categoryFolders: true,
@@ -23,6 +31,12 @@ export function createMockApi() {
     clipboardMonitor: true,
     notifyOnComplete: true,
     apiPort: 6801,
+    ffmpegPath: '',
+    theme: 'system',
+    accent: 'blue',
+    density: 'comfortable',
+    closeToTray: false,
+    schedule: { enabled: true, startTime: '02:00', stopTime: '07:00', days: [1, 2, 3, 4, 5], afterDone: 'nothing' },
   };
   let seq = 0;
   const downloads = [];
@@ -75,6 +89,24 @@ export function createMockApi() {
   make('https://example.org/media/lecture_remote_sensing_01.mp4', { status: 'completed', total: 742_000_000 });
   make('https://example.org/audio/podcast_ep42.mp3', { status: 'error', total: 64_000_000, done: 1_000_000 }).error = 'HTTP 403 Forbidden';
   make('https://example.org/tools/7z2409-x64.exe', { status: 'queued', total: 1_600_000 });
+  make('ftp://ftp.example.org/pub/landsat/LC09_L2SP_144046_20260310.tar', { status: 'scheduled', total: 980_000_000, done: 0 });
+  Object.assign(make('https://portal.example.org/secure/dem_tile_N28E077.zip', { status: 'auth-required', total: null, done: 0 }), {
+    error: 'Login required: Data portal',
+    segments: [],
+  });
+  const stream = make('https://cdn.example.org/lectures/gis-101/master.m3u8', {
+    status: 'downloading',
+    fileName: 'GIS 101 – Projections.mp4',
+  });
+  Object.assign(stream, {
+    kind: 'hls',
+    category: 'Video',
+    segments: [],
+    segmentsTotal: 412,
+    segmentsDone: 150,
+    sizeIsEstimate: true,
+    streamInfo: { width: 1920, height: 1080, bandwidth: 5_200_000, tracks: [{ type: 'video', segments: 206 }, { type: 'audio', segments: 206 }] },
+  });
 
   const emit = () => listeners.update.forEach((fn) => fn(downloads.map((d) => ({ ...d, segments: d.segments.map((s) => ({ ...s })) }))));
 
@@ -96,6 +128,20 @@ export function createMockApi() {
         d.eta = null;
         d.activeConnections = 0;
         d.segments.forEach((s) => (s.active = false));
+        continue;
+      }
+      if (d.kind === 'hls') {
+        d.segmentsDone = Math.min(d.segmentsTotal, d.segmentsDone + 2);
+        d.downloadedBytes = d.segmentsDone * 1_400_000;
+        d.totalBytes = d.segmentsTotal * 1_400_000;
+        d.speed = 5_600_000;
+        d.activeConnections = 8;
+        d.eta = ((d.segmentsTotal - d.segmentsDone) / 4) * 1;
+        d.pieces = Array.from({ length: 120 }, (_, i) => (i / 120 < d.segmentsDone / d.segmentsTotal ? 1 : 0));
+        if (d.segmentsDone >= d.segmentsTotal) {
+          d.status = 'completed';
+          d.completedAt = Date.now();
+        }
         continue;
       }
       let added = 0;
@@ -147,6 +193,47 @@ export function createMockApi() {
       for (const id of ids) downloads.splice(downloads.findIndex((d) => d.id === id), 1);
       emit();
     },
+    setCredentials: async (id) => {
+      const d = downloads.find((x) => x.id === id);
+      Object.assign(d, { status: 'queued', error: null, hasLogin: true, totalBytes: 312_000_000 });
+      d.segments = [{ start: 0, end: d.totalBytes - 1, downloaded: 0, active: false }];
+      pump();
+      emit();
+    },
+    schedule: async (ids) => setStatus(ids, 'scheduled'),
+    runSchedule: async () => {
+      const ids = downloads.filter((d) => d.status === 'scheduled').map((d) => d.id);
+      setStatus(ids, 'queued');
+      return ids.length;
+    },
+    cancelPowerAction: async () => listeners.power.forEach((fn) => fn(null)),
+    respondPair: async (requestId) => listeners.pairClosed.forEach((fn) => fn(requestId)),
+    pairings: async () => [{ id: 'p1', browser: 'Microsoft Edge', origin: 'chrome-extension://abc', createdAt: Date.now() - 86400000 }],
+    revokePairing: async () => [],
+    probe: async ({ url }) => {
+      await new Promise((r) => setTimeout(r, 700));
+      const name = decodeURIComponent(new URL(url).pathname.split('/').pop() || 'download');
+      if (/secure|portal/.test(url)) return { url, kind: 'file', authRequired: true, realm: 'Data portal', error: 'Login required' };
+      if (/\.m3u8$/.test(name)) {
+        return {
+          url,
+          kind: 'hls',
+          fileName: 'lecture.mp4',
+          category: 'Video',
+          qualities: [1080, 720, 480, 360].map((height, i) => ({ height, bandwidth: [5.2e6, 2.8e6, 1.4e6, 0.8e6][i] })),
+          duration: 2843,
+          segments: 474,
+          separateAudio: true,
+        };
+      }
+      return { url, kind: 'file', fileName: name, totalBytes: 734_003_200, resumable: true, category: categoryOf(name) };
+    },
+    platform: async () => 'win32',
+    setTitleBar: async () => {},
+    checkFfmpeg: async () => ({ path: 'ffmpeg', version: 'ffmpeg version 7.1 (preview)' }),
+    openExtensionFolder: async () => {},
+    extensionFolder: async (browser) => `C:\\Program Files\\Anabranch\\resources\\browser-extension\\${browser}`,
+    chooseFile: async () => 'C:\\ffmpeg\\bin\\ffmpeg.exe',
     removeCompleted: async () => {
       for (let i = downloads.length - 1; i >= 0; i--) if (downloads[i].status === 'completed') downloads.splice(i, 1);
       emit();
@@ -166,11 +253,22 @@ export function createMockApi() {
       port: 6801,
       token: '3f9c1e0a7b5d42c88e61f0d2a9b7c4e1d5f6a8b9c0d1e2f3',
       url: 'http://127.0.0.1:6801',
-      mcpScript: 'C:\\Program Files\\Download Manager\\resources\\mcp\\download-manager-mcp.cjs',
-      executable: 'C:\\Program Files\\Download Manager\\Download Manager.exe',
+      mcpScript: 'C:\\Program Files\\Anabranch\\resources\\mcp\\anabranch-mcp.cjs',
+      executable: 'C:\\Program Files\\Anabranch\\Anabranch.exe',
     }),
     onUpdate: (fn) => (listeners.update.add(fn), () => listeners.update.delete(fn)),
     onSettings: (fn) => (listeners.settings.add(fn), () => listeners.settings.delete(fn)),
     onPromptAdd: (fn) => (listeners.prompt.add(fn), () => listeners.prompt.delete(fn)),
+    onAuthRequired: (fn) => (listeners.auth.add(fn), () => listeners.auth.delete(fn)),
+    onPairRequest: (fn) => (listeners.pair.add(fn), () => listeners.pair.delete(fn)),
+    onPairClosed: (fn) => (listeners.pairClosed.add(fn), () => listeners.pairClosed.delete(fn)),
+    onPowerCountdown: (fn) => (listeners.power.add(fn), () => listeners.power.delete(fn)),
+    // Preview-only helpers to show the event-driven dialogs.
+    simulatePairRequest: () => listeners.pair.forEach((fn) => fn({ requestId: 'r1', browser: 'Chrome', origin: 'chrome-extension://kfhlmnbcpdeogjaiab' })),
+    simulatePowerCountdown: () => listeners.power.forEach((fn) => fn({ action: 'shutdown', seconds: 60 })),
+    simulateBrowserPrompt: () =>
+      listeners.prompt.forEach((fn) =>
+        fn({ items: [{ url: 'https://cdn.example.org/vod/film/manifest.mpd', kind: 'dash', fileName: 'Field survey briefing', headers: { Cookie: 'sid=1', Referer: 'https://example.org/' } }] }),
+      ),
   };
 }

@@ -1,51 +1,62 @@
 import { Icon } from '../icons.jsx';
 
-const BUTTONS = [
-  { key: 'add', label: 'Add URL', icon: 'plus', primary: true, always: true, title: 'Add a download (Insert)' },
-  { key: 'resume', label: 'Resume', icon: 'play' },
-  { key: 'stop', label: 'Stop', icon: 'stop' },
-  { sep: true },
-  { key: 'resumeAll', label: 'Resume All', icon: 'playAll' },
-  { key: 'stopAll', label: 'Stop All', icon: 'stopAll' },
-  { sep: true },
-  { key: 'remove', label: 'Delete', icon: 'trash', title: 'Delete selected (Del)' },
-  { key: 'removeCompleted', label: 'Delete Completed', icon: 'sweep' },
-  { sep: true },
-  { key: 'openFolder', label: 'Open Folder', icon: 'folder', always: true },
-  { key: 'settings', label: 'Options', icon: 'gear', always: true },
+const SORTS = [
+  ['createdAt', 'Date added'],
+  ['fileName', 'Name'],
+  ['totalBytes', 'Size'],
+  ['progress', 'Progress'],
+  ['speed', 'Speed'],
+  ['status', 'Status'],
 ];
 
-export function Toolbar({ can, actions, query, onQuery }) {
+function Tool({ icon, label, onClick, disabled, title, secondary }) {
   return (
-    <header className="toolbar">
-      <div className="toolbar-buttons">
-        {BUTTONS.map((b, i) =>
-          b.sep ? (
-            <span key={i} className="toolbar-sep" />
-          ) : (
-            <button
-              key={b.key}
-              type="button"
-              className={`tool ${b.primary ? 'tool-primary' : ''}`}
-              disabled={!b.always && !can[b.key]}
-              onClick={actions[b.key]}
-              title={b.title || b.label}
-            >
-              <Icon name={b.icon} size={22} />
-              <span>{b.label}</span>
-            </button>
-          ),
-        )}
+    <button type="button" className={`tool ${secondary ? 'tool-secondary' : ''}`} onClick={onClick} disabled={disabled} title={title || label} aria-label={label}>
+      <Icon name={icon} size={17} />
+      <span>{label}</span>
+    </button>
+  );
+}
+
+export function Toolbar({ title, count, can, actions, sort, onSort, density, onDensity, selectionSize }) {
+  return (
+    <div className="toolbar">
+      <div className="toolbar-title">
+        <h1>{title}</h1>
+        <span className="muted">{selectionSize > 1 ? `${selectionSize} selected` : `${count} item${count === 1 ? '' : 's'}`}</span>
       </div>
-      <label className="search">
-        <Icon name="search" size={16} />
-        <input
-          type="search"
-          placeholder="Search downloads"
-          value={query}
-          onChange={(e) => onQuery(e.target.value)}
-        />
-      </label>
-    </header>
+      <div className="toolbar-actions" role="toolbar" aria-label="Download actions">
+        <Tool icon="play" label="Resume" onClick={actions.resume} disabled={!can.resume} title="Resume (Space)" />
+        <Tool icon="pause" label="Pause" onClick={actions.stop} disabled={!can.stop} title="Pause (Space)" />
+        <Tool icon="calendar" label="Schedule" onClick={actions.schedule} disabled={!can.schedule} />
+        <Tool icon="trash" label="Delete" onClick={actions.remove} disabled={!can.remove} title="Delete (Del)" />
+        <span className="toolbar-sep" />
+        <Tool icon="playAll" label="Resume all" onClick={actions.resumeAll} disabled={!can.resumeAll} secondary />
+        <Tool icon="stopAll" label="Pause all" onClick={actions.stopAll} disabled={!can.stopAll} secondary />
+        <Tool icon="sweep" label="Clear finished" onClick={actions.removeCompleted} disabled={!can.removeCompleted} secondary />
+      </div>
+      <div className="toolbar-view">
+        <label className="select-inline" title="Sort">
+          <Icon name="sort" size={15} />
+          <select
+            value={sort.key}
+            onChange={(e) => onSort({ key: e.target.value, dir: e.target.value === 'fileName' ? 'asc' : 'desc' })}
+            aria-label="Sort by"
+          >
+            {SORTS.map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+        </label>
+        <div className="segmented" role="group" aria-label="Density">
+          <button type="button" className={density === 'comfortable' ? 'is-on' : ''} onClick={() => onDensity('comfortable')} title="Comfortable rows" aria-pressed={density === 'comfortable'}>
+            <Icon name="rows" size={15} />
+          </button>
+          <button type="button" className={density === 'compact' ? 'is-on' : ''} onClick={() => onDensity('compact')} title="Compact table" aria-pressed={density === 'compact'}>
+            <Icon name="list" size={15} />
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

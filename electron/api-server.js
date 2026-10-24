@@ -3,45 +3,79 @@
 const http = require('http');
 const crypto = require('crypto');
 
-// Local REST API used by the MCP server (and any other local tool). It binds
-// to 127.0.0.1 only and every request must carry the bearer token, which is
-// written to <userData>/api.json for local clients to discover.
+// Local REST API used by the MCP server and the browser extension. It binds
+// to 127.0.0.1 only. Requests from web pages (an Origin that is not a
+// browser extension) are refused, and every route except /api/ping and
+// /api/pair needs a bearer token: the app token in <userData>/api.json, or a
+// token issued to a browser extension the user approved.
 //
+//   GET    /api/ping                     app presence (and whether the token is valid)
+//   POST   /api/pair                     extension asks the user for a token {browser}
 //   GET    /api/downloads                list
-//   POST   /api/downloads                add {url, fileName?, directory?, connections?, start?}
+//   POST   /api/downloads                add {url, fileName?, directory?, connections?, start?,
+//                                         schedule?, kind?, quality?, headers?, username?, password?}
+//   POST   /api/prompt                   open the Add dialog in the app {items: [{url, ...}]}
+//   POST   /api/probe                    inspect a URL without downloading {url, kind?, headers?, username?, password?}
 //   GET    /api/downloads/:id            one download
 //   POST   /api/downloads/:id/pause      pause
 //   POST   /api/downloads/:id/resume     resume / retry
+//   POST   /api/downloads/:id/schedule   move to the scheduled queue
+//   POST   /api/downloads/:id/credentials  {username, password, remember?}
 //   DELETE /api/downloads/:id?deleteFile=true
 //   POST   /api/pause-all, /api/resume-all
 //   GET    /api/settings, PATCH /api/settings
-function createApiServer(manager, { token }) {
-  const expected = Buffer.from(`Bearer ${token}`);
+//   GET    /api/scheduler, PATCH /api/scheduler, POST /api/scheduler/run
 
-  const authorised = (req) => {
-    const given = Buffer.from(req.headers.authorization || '');
-    return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+const EXTENSION_ORIGIN = /^(chrome|moz|ms-browser|safari-web)-extension:\/\//i;
+
+function createApiServer(manager, { token, isPairedToken = () => false, onPair, onPrompt, version = '1.0.0' }) {
+  const expected = Buffer.from(token);
+
+  const tokenValid = (req) => {
+    const match = /^Bearer\s+(\S+)$/.exec(req.headers.authorization || '');
+    if (!match) return false;
+    const given = Buffer.from(match[1]);
+    if (given.length === expected.length && crypto.timingSafeEqual(given, expected)) return true;
+    return isPairedToken(match[1]);
   };
 
+  const id = '([\\w-]+)';
   const routes = [
-    ['GET', /^\/api\/downloads$/, () => manager.list()],
-    ['POST', /^\/api\/downloads$/, (_m, body) => manager.add(body)],
-    ['GET', /^\/api\/downloads\/([\w-]+)$/, ([, id]) => manager.get(id).snapshot()],
-    ['POST', /^\/api\/downloads\/([\w-]+)\/pause$/, ([, id]) => manager.pause(id)],
-    ['POST', /^\/api\/downloads\/([\w-]+)\/resume$/, ([, id]) => manager.resume(id)],
+    ['GET', '/api/downloads', () => manager.list()],
+    ['POST', '/api/probe', (_m, body) => manager.probe(body)],
+    ['POST', '/api/downloads', (_m, body) => manager.add(body)],
     [
-      'DELETE',
-      /^\/api\/downloads\/([\w-]+)$/,
-      async ([, id], _body, query) => {
-        await manager.remove(id, { deleteFile: query.get('deleteFile') === 'true' });
-        return { removed: id };
+      'POST',
+      '/api/prompt',
+      (_m, body) => {
+        const items = (Array.isArray(body.items) ? body.items : [body]).filter((i) => i && i.url);
+        if (!items.length) throw new Error('No URLs given');
+        if (!onPrompt) throw new Error('Prompting is not available');
+        onPrompt(items);
+        return { prompted: items.length };
       },
     ],
-    ['POST', /^\/api\/pause-all$/, () => (manager.pauseAll(), manager.list())],
-    ['POST', /^\/api\/resume-all$/, () => (manager.resumeAll(), manager.list())],
-    ['GET', /^\/api\/settings$/, () => manager.settings],
-    ['PATCH', /^\/api\/settings$/, (_m, body) => manager.updateSettings(body)],
-  ];
+    ['GET', `/api/downloads/${id}`, ([, d]) => manager.get(d).snapshot()],
+    ['POST', `/api/downloads/${id}/pause`, ([, d]) => manager.pause(d)],
+    ['POST', `/api/downloads/${id}/resume`, ([, d]) => manager.resume(d)],
+    ['POST', `/api/downloads/${id}/schedule`, ([, d]) => manager.schedule([d])[0]],
+    ['POST', `/api/downloads/${id}/credentials`, ([, d], body) => manager.setCredentials(d, body)],
+    [
+      'DELETE',
+      `/api/downloads/${id}`,
+      async ([, d], _body, query) => {
+        await manager.remove(d, { deleteFile: query.get('deleteFile') === 'true' });
+        return { removed: d };
+      },
+    ],
+    ['POST', '/api/pause-all', () => (manager.pauseAll(), manager.list())],
+    ['POST', '/api/resume-all', () => (manager.resumeAll(), manager.list())],
+    ['GET', '/api/settings', () => manager.settings],
+    ['PATCH', '/api/settings', (_m, body) => manager.updateSettings(body)],
+    ['GET', '/api/scheduler', () => manager.settings.schedule],
+    ['PATCH', '/api/scheduler', async (_m, body) => (await manager.updateSettings({ schedule: body })).schedule],
+    ['POST', '/api/scheduler/run', () => ({ started: manager.runSchedule() })],
+  ].map(([method, pattern, handler]) => [method, new RegExp(`^${pattern}$`), handler]);
 
   return http.createServer(async (req, res) => {
     const send = (status, payload) => {
@@ -49,15 +83,26 @@ function createApiServer(manager, { token }) {
       res.end(JSON.stringify(payload));
     };
 
-    // Browsers attach an Origin header; web pages have no business here.
-    if (req.headers.origin) return send(403, { error: 'Cross-origin requests are not allowed' });
-    if (!authorised(req)) return send(401, { error: 'Missing or invalid API token' });
-
+    const origin = req.headers.origin;
+    if (origin && !EXTENSION_ORIGIN.test(origin)) {
+      return send(403, { error: 'Requests from web pages are not allowed' });
+    }
     const url = new URL(req.url, 'http://127.0.0.1');
-    const route = routes.find(([method, pattern]) => method === req.method && pattern.test(url.pathname));
-    if (!route) return send(404, { error: 'Not found' });
 
     try {
+      if (req.method === 'GET' && url.pathname === '/api/ping') {
+        return send(200, { app: 'anabranch', version, authorised: tokenValid(req) });
+      }
+      if (req.method === 'POST' && url.pathname === '/api/pair') {
+        if (!onPair) return send(404, { error: 'Pairing is not available' });
+        const body = await readBody(req);
+        const issued = await onPair({ origin: origin || null, browser: String(body.browser || 'Browser').slice(0, 60) });
+        return issued ? send(200, { token: issued }) : send(403, { error: 'The connection was declined in Anabranch' });
+      }
+
+      if (!tokenValid(req)) return send(401, { error: 'Missing or invalid API token' });
+      const route = routes.find(([method, pattern]) => method === req.method && pattern.test(url.pathname));
+      if (!route) return send(404, { error: 'Not found' });
       const body = ['POST', 'PATCH'].includes(req.method) ? await readBody(req) : {};
       const result = await route[2](route[1].exec(url.pathname), body, url.searchParams);
       send(200, result);
@@ -111,4 +156,4 @@ function listen(server, preferredPort, attempts = 10) {
   });
 }
 
-module.exports = { createApiServer, listen };
+module.exports = { createApiServer, listen, EXTENSION_ORIGIN };

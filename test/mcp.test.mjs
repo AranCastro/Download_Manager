@@ -15,7 +15,7 @@ const { createApiServer, listen } = require('../electron/api-server.js');
 const { startFileServer, waitFor } = require('./helpers.js');
 
 // Runs the bundled server when it has been built, otherwise the source.
-const bundled = path.resolve('dist-mcp/download-manager-mcp.cjs');
+const bundled = path.resolve('dist-mcp/anabranch-mcp.cjs');
 const serverScript = fs.existsSync(bundled) ? bundled : path.resolve('mcp/server.mjs');
 
 const parse = (result) => JSON.parse(result.content[0].text);
@@ -52,10 +52,18 @@ test('MCP tools drive the download manager through the local API', async (t) => 
   assert.deepEqual(
     tools.map((x) => x.name).sort(),
     [
-      'add_download', 'get_download', 'get_settings', 'list_downloads', 'pause_all',
-      'pause_download', 'remove_download', 'resume_all', 'resume_download', 'update_settings',
+      'add_download', 'get_download', 'get_scheduler', 'get_settings', 'list_downloads', 'pause_all',
+      'pause_download', 'probe_url', 'remove_download', 'resume_all', 'resume_download', 'run_scheduler_now',
+      'schedule_download', 'set_credentials', 'update_scheduler', 'update_settings',
     ],
   );
+
+  const probed = parse(await client.callTool({ name: 'probe_url', arguments: { url: files.url('/video.mp4') } }));
+  assert.deepEqual(
+    { fileName: probed.fileName, size: probed.size, resumable: probed.resumable, category: probed.category },
+    { fileName: 'video.mp4', size: '2.0 MB', resumable: true, category: 'Video' },
+  );
+  assert.equal(manager.list().length, 0, 'probing must not add a download');
 
   const added = parse(
     await client.callTool({ name: 'add_download', arguments: { url: files.url('/video.mp4') } }),
@@ -74,11 +82,25 @@ test('MCP tools drive the download manager through the local API', async (t) => 
   assert.equal(settings.speedLimitKBps, 512);
   assert.equal(manager.limiter.rate, 512 * 1024);
 
+  const scheduler = parse(
+    await client.callTool({
+      name: 'update_scheduler',
+      arguments: { enabled: true, startTime: '1:30', days: [1, 3, 5], afterDone: 'sleep' },
+    }),
+  );
+  assert.deepEqual(scheduler, { enabled: true, startTime: '01:30', stopTime: '', days: [1, 3, 5], afterDone: 'sleep' });
+  const later = parse(
+    await client.callTool({ name: 'add_download', arguments: { url: files.url('/later.zip'), schedule: true } }),
+  );
+  assert.equal(later.status, 'scheduled');
+  parse(await client.callTool({ name: 'run_scheduler_now', arguments: {} }));
+  await waitFor(() => manager.get(later.id).status === 'completed');
+
   const bad = await client.callTool({ name: 'get_download', arguments: { id: 'nope' } });
   assert.equal(bad.isError, true);
 
   await client.callTool({ name: 'remove_download', arguments: { id: added.id, deleteFile: true } });
-  assert.equal(manager.list().length, 0);
+  assert.equal(manager.list().length, 1);
   assert.equal(fs.existsSync(listed[0].savePath), false);
 });
 
@@ -93,10 +115,59 @@ test('API rejects requests without the token or from web pages', async (t) => {
   });
 
   const url = `http://127.0.0.1:${port}/api/downloads`;
+  const ping = await (await fetch(`http://127.0.0.1:${port}/api/ping`)).json();
+  assert.deepEqual(ping, { app: 'anabranch', version: '1.0.0', authorised: false });
   assert.equal((await fetch(url)).status, 401);
   assert.equal(
     (await fetch(url, { headers: { Authorization: 'Bearer secret', Origin: 'https://evil.example' } })).status,
     403,
   );
   assert.equal((await fetch(url, { headers: { Authorization: 'Bearer secret' } })).status, 200);
+});
+
+test('browser extensions pair only after the user approves, and get their own token', async (t) => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'dm-pair-'));
+  const manager = await new DownloadManager({ dataDir: root }).init({ startScheduler: false });
+  const paired = new Set();
+  let approve = true;
+  const prompts = [];
+  const api = createApiServer(manager, {
+    token: 'app-token',
+    isPairedToken: (tok) => paired.has(tok),
+    onPair: async ({ origin, browser }) => {
+      if (!approve) return null;
+      const tok = `ext-${browser}-${origin}`;
+      paired.add(tok);
+      return tok;
+    },
+    onPrompt: (items) => prompts.push(...items),
+  });
+  const port = await listen(api, 0);
+  t.after(async () => {
+    await manager.shutdown();
+    api.close();
+  });
+  const base = `http://127.0.0.1:${port}`;
+  const extOrigin = 'chrome-extension://abcdefghijklmnop';
+
+  const web = await fetch(`${base}/api/pair`, { method: 'POST', headers: { Origin: 'https://evil.example' }, body: '{}' });
+  assert.equal(web.status, 403);
+
+  approve = false;
+  const declined = await fetch(`${base}/api/pair`, { method: 'POST', headers: { Origin: extOrigin }, body: '{"browser":"Chrome"}' });
+  assert.equal(declined.status, 403);
+
+  approve = true;
+  const { token } = await (await fetch(`${base}/api/pair`, { method: 'POST', headers: { Origin: extOrigin }, body: '{"browser":"Chrome"}' })).json();
+  assert.equal(token, `ext-Chrome-${extOrigin}`);
+  const headers = { Origin: extOrigin, Authorization: `Bearer ${token}` };
+  assert.equal((await (await fetch(`${base}/api/ping`, { headers })).json()).authorised, true);
+
+  const res = await fetch(`${base}/api/prompt`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ items: [{ url: 'https://example.org/a.zip', headers: { Cookie: 'sid=1' } }] }),
+  });
+  assert.equal(res.status, 200);
+  assert.equal(prompts[0].headers.Cookie, 'sid=1');
 });

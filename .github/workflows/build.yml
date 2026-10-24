@@ -23,7 +23,7 @@ jobs:
 
       - run: npm ci
 
-      - name: Build renderer and MCP bundle
+      - name: Build renderer, MCP bundle and browser extension
         run: npm run build
 
       - name: Test
@@ -34,8 +34,14 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: download-manager-windows
+          name: anabranch-windows
           path: release/*.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-extension
+          path: dist-extension/*.zip
           if-no-files-found: error
 
       - name: Publish GitHub release (tags only)
@@ -43,4 +49,4 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" release/*.exe --title "$GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" release/*.exe dist-extension/*.zip --title "$GITHUB_REF_NAME" --generate-notes
