@@ -61,6 +61,17 @@ async function findYtDlp({ preferred, toolsDir, override } = {}) {
   return null;
 }
 
+// Since late 2025 yt-dlp needs a JavaScript runtime to read YouTube's player;
+// without one most formats are missing (often every single-file format, which
+// is all that can be used without FFmpeg). The app's own runtime is Node 22 or
+// later, so yt-dlp is pointed at it: Electron runs as plain Node when
+// ELECTRON_RUN_AS_NODE is set, and yt-dlp passes its environment on.
+// A Deno that the user installed is still found by yt-dlp itself.
+function jsRuntime() {
+  if (Number(process.versions.node.split('.')[0]) < 22) return null;
+  return { path: process.execPath, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } };
+}
+
 // Downloads a URL to a file (following redirects), reporting progress.
 async function fetchToFile(url, file, { onProgress, signal } = {}) {
   const res = await fetch(url, { redirect: 'follow', signal });
@@ -130,4 +141,4 @@ function findFile(dir, name) {
   return null;
 }
 
-module.exports = { findYtDlp, installYtDlp, installFfmpeg, versionOf, fetchToFile, YTDLP_ASSETS };
+module.exports = { jsRuntime, findYtDlp, installYtDlp, installFfmpeg, versionOf, fetchToFile, YTDLP_ASSETS };

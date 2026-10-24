@@ -48,10 +48,10 @@
 
 GitHub Actions builds the app and runs the tests on Windows on every push. Open the **Actions** tab, select the latest **Build Windows exe** run, and download these artifacts:
 
-- **anabranch-windows** contains `Anabranch-Setup-1.2.0.exe` (an installer) and `Anabranch-Portable-1.2.0.exe` (one file, no installation).
+- **anabranch-windows** contains `Anabranch-Setup-1.2.1.exe` (an installer) and `Anabranch-Portable-1.2.1.exe` (one file, no installation).
 - **browser-extension** contains the extension as zip files for Chromium-based browsers and for Firefox.
 
-When a tag such as `v1.2.0` is pushed, the workflow also attaches these files to a GitHub Release. A release can also be made without pushing a tag: run **Build Windows exe** from the Actions tab (**Run workflow**) and enter the tag; the workflow creates the tag on the commit it built. The executables are not code-signed, so Windows SmartScreen shows a warning on first launch; select **More info → Run anyway**.
+When a tag such as `v1.2.1` is pushed, the workflow also attaches these files to a GitHub Release. A release can also be made without pushing a tag: run **Build Windows exe** from the Actions tab (**Run workflow**) and enter the tag; the workflow creates the tag on the commit it built. The executables are not code-signed, so Windows SmartScreen shows a warning on first launch; select **More info → Run anyway**.
 
 ## Browser extension
 

@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const { spawn } = require('child_process');
 const { BaseDownload } = require('../BaseDownload');
 const { isAudio, downloadArgs, parseLine, describeFailure, cookieFile, siteName } = require('./ytdlp');
+const { jsRuntime } = require('../tools');
 
 const PARTIAL = /\.(part|ytdl|temp)$|\.part-Frag\d+|\.f\d+\.\w+$/;
 
@@ -37,6 +38,7 @@ class SiteDownload extends BaseDownload {
       await fsp.writeFile(cookiesPath, cookieFile(this.headers.Cookie, this.url), { mode: 0o600 });
     }
 
+    const runtime = jsRuntime();
     const args = downloadArgs({
       url: this.url,
       quality: this.quality,
@@ -47,6 +49,7 @@ class SiteDownload extends BaseDownload {
       cookiesFile: cookiesPath,
       userAgent: this.headers['User-Agent'],
       connections: this.connections,
+      jsRuntime: runtime?.path,
     });
 
     const { ctrl, release } = this.controller(session);
@@ -56,7 +59,7 @@ class SiteDownload extends BaseDownload {
     let stderr = '';
     try {
       const code = await new Promise((resolve, reject) => {
-        const child = spawn(tool.command, [...tool.args, ...args], { signal: ctrl.signal, windowsHide: true });
+        const child = spawn(tool.command, [...tool.args, ...args], { signal: ctrl.signal, windowsHide: true, env: runtime?.env });
         let buffer = '';
         child.stdout.setEncoding('utf8');
         child.stdout.on('data', (chunk) => {
@@ -101,7 +104,7 @@ class SiteDownload extends BaseDownload {
       });
       if (session.cancelled) return;
       if (code !== 0 || !finalPath) {
-        throw Object.assign(new Error(describeFailure(stderr || `yt-dlp exited with code ${code}`)), { fatal: true });
+        throw Object.assign(new Error(describeFailure(stderr || `yt-dlp exited with code ${code}`, { hasFfmpeg: Boolean(ffmpeg) })), { fatal: true });
       }
     } catch (err) {
       if (session.cancelled || err.name === 'AbortError') return;

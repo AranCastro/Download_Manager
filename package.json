@@ -1,7 +1,7 @@
 {
   "name": "anabranch-download-manager",
   "productName": "Anabranch",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Anabranch: a multi-connection desktop download manager (Electron + React) with FTP, HLS/DASH, YouTube (yt-dlp), a scheduler, a browser extension and an MCP server.",
   "author": "Dr Aran Castro <arancastro17@gmail.com>",

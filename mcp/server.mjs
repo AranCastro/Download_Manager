@@ -106,7 +106,7 @@ const tool = (handler) => async (args) => {
   }
 };
 
-const server = new McpServer({ name: 'anabranch', version: '1.2.0' });
+const server = new McpServer({ name: 'anabranch', version: '1.2.1' });
 
 const STATUSES = ['queued', 'scheduled', 'connecting', 'downloading', 'merging', 'paused', 'completed', 'error', 'auth-required'];
 

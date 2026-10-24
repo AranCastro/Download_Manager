@@ -67,6 +67,10 @@ test('YouTube URLs are recognised and yt-dlp output is parsed', () => {
   assert.equal(parseLine('[download] 50%'), null);
 
   assert.match(describeFailure("ERROR: [youtube] x: Sign in to confirm you're not a bot"), /browser extension/);
+  const noFormat = 'ERROR: [youtube] x: Requested format is not available. Use --list-formats';
+  assert.match(describeFailure(noFormat, { hasFfmpeg: false }), /Install FFmpeg/);
+  assert.match(describeFailure(noFormat), /Update yt-dlp/);
+  assert.match(describeFailure('ERROR: unable to download video data: HTTP Error 403: Forbidden'), /HTTP 403/);
   const jar = cookieFile('SID=abc; HSID=def', WATCH);
   assert.match(jar, /^# Netscape HTTP Cookie File\n\.youtube\.com\tTRUE\t\/\tTRUE\t0\tSID\tabc\n/);
 
@@ -128,6 +132,9 @@ test('without FFmpeg a single-file format is used', async () => {
   await completed(manager, added.id);
   assert.deepEqual(await fsp.readFile(manager.get(added.id).savePath), expectedBytes([786432]));
   assert.match(log(), /"-f","b"/);
+  // The single-file formats need the JavaScript runtime the app passes on.
+  assert.match(log(), /"--js-runtimes","node:/);
+  assert.match(log(), /^RUNTIME true$/m);
   assert.doesNotMatch(log(), /merge-output-format/);
   await manager.shutdown();
 });

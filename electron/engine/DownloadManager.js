@@ -15,7 +15,7 @@ const { Scheduler, DEFAULT_SCHEDULE, normaliseSchedule } = require('./Scheduler'
 const { findFfmpeg } = require('./ffmpeg');
 const { SiteDownload } = require('./sites/SiteDownload');
 const { isSiteUrl, probeArgs, parseProbe, describeFailure, cookieFile } = require('./sites/ytdlp');
-const { findYtDlp, installYtDlp, installFfmpeg } = require('./tools');
+const { findYtDlp, installYtDlp, installFfmpeg, jsRuntime } = require('./tools');
 const { execFile } = require('child_process');
 const crypto = require('crypto');
 const { categorise } = require('./utils');
@@ -422,12 +422,13 @@ class DownloadManager extends EventEmitter {
       cookiesPath = path.join(os.tmpdir(), `anabranch-cookies-${crypto.randomBytes(6).toString('hex')}.txt`);
       await fsp.writeFile(cookiesPath, cookieFile(headers.Cookie, url), { mode: 0o600 });
     }
+    const runtime = jsRuntime();
     try {
       const { stdout } = await new Promise((resolve, reject) => {
         execFile(
           tool.command,
-          [...tool.args, ...probeArgs(url, { cookiesFile: cookiesPath })],
-          { windowsHide: true, timeout: 45000, maxBuffer: 64 * 1024 * 1024 },
+          [...tool.args, ...probeArgs(url, { cookiesFile: cookiesPath, jsRuntime: runtime?.path })],
+          { windowsHide: true, timeout: 45000, maxBuffer: 64 * 1024 * 1024, env: runtime?.env },
           (err, out, errOut) => (err ? reject(Object.assign(err, { stderr: errOut })) : resolve({ stdout: out })),
         );
       });
