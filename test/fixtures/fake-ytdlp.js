@@ -7,6 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 const args = process.argv.slice(2);
 const log = (line) => process.env.FAKE_YTDLP_LOG && fs.appendFileSync(process.env.FAKE_YTDLP_LOG, `${line}\n`);
@@ -70,6 +71,25 @@ if (args.includes('-J')) {
 const dir = value('-P');
 const template = value('-o');
 const format = value('-f') || '';
+
+// As on YouTube since late 2025: without a working JavaScript runtime the
+// single-file formats are missing. Like yt-dlp, the runtime is checked by
+// running it with --version in this process's environment.
+const runtime = value('--js-runtimes');
+let hasRuntime = false;
+if (runtime && runtime.startsWith('node:')) {
+  try {
+    hasRuntime = /^v\d+/.test(execFileSync(runtime.slice(5), ['--version'], { encoding: 'utf8' }));
+  } catch {
+    hasRuntime = false;
+  }
+}
+log(`RUNTIME ${hasRuntime}`);
+if (!hasRuntime && /^b(\[|$)/.test(format)) {
+  process.stderr.write('WARNING: [youtube] No supported JavaScript runtime could be found.\n');
+  process.stderr.write('ERROR: [youtube] abc123: Requested format is not available. Use --list-formats for a list of available formats\n');
+  process.exit(1);
+}
 const merge = args.includes('--merge-output-format');
 const extract = args.includes('-x');
 const audioOnly = /^ba/.test(format);

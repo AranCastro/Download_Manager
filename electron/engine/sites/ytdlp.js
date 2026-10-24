@@ -48,7 +48,8 @@ const INFO = 'before_dl:DMINFO %(title)s|%(uploader,channel)s|%(duration)s|%(hei
 // hasFfmpeg: FFmpeg can be used at all. ffmpegLocation: the folder holding
 // ffmpeg and ffprobe, passed only when known (an FFmpeg on PATH is found by
 // yt-dlp itself, and a bare command name is not a location).
-function downloadArgs({ url, quality, directory, fileName, hasFfmpeg, ffmpegLocation, cookiesFile, userAgent, connections }) {
+// jsRuntime: a Node binary for YouTube's player scripts (see tools.js).
+function downloadArgs({ url, quality, directory, fileName, hasFfmpeg, ffmpegLocation, cookiesFile, userAgent, connections, jsRuntime }) {
   const name = fileName ? `${sanitiseFileName(fileName).replace(/%/g, '%%')}.%(ext)s` : '%(title).150B [%(id)s].%(ext)s';
   const args = [
     '--newline',
@@ -70,14 +71,16 @@ function downloadArgs({ url, quality, directory, fileName, hasFfmpeg, ffmpegLoca
     ...formatArgs(quality, Boolean(hasFfmpeg)),
   ];
   if (hasFfmpeg && ffmpegLocation) args.push('--ffmpeg-location', ffmpegLocation);
+  if (jsRuntime) args.push('--js-runtimes', `node:${jsRuntime}`);
   if (cookiesFile) args.push('--cookies', cookiesFile);
   if (userAgent) args.push('--user-agent', userAgent);
   args.push('--', url);
   return args;
 }
 
-function probeArgs(url, { cookiesFile } = {}) {
+function probeArgs(url, { cookiesFile, jsRuntime } = {}) {
   const args = ['-J', '--no-warnings', '--no-playlist', '--flat-playlist'];
+  if (jsRuntime) args.push('--js-runtimes', `node:${jsRuntime}`);
   if (cookiesFile) args.push('--cookies', cookiesFile);
   args.push('--', url);
   return args;
@@ -159,7 +162,8 @@ function parseProbe(json, url) {
 }
 
 // The last ERROR line of yt-dlp, rewritten where a clearer next step exists.
-function describeFailure(stderr) {
+// hasFfmpeg: false when only single-file formats could be asked for.
+function describeFailure(stderr, { hasFfmpeg = true } = {}) {
   const line =
     stderr
       .split(/\r?\n/)
@@ -172,7 +176,16 @@ function describeFailure(stderr) {
     return 'This video needs a signed-in account with access. Send it from the browser extension while signed in to YouTube.';
   }
   if (/DRM/i.test(line)) return 'This video is DRM-protected and cannot be downloaded.';
-  if (/Requested format is not available/i.test(line)) return 'That quality is not available for this video. Choose another quality.';
+  // Video links are tied to the address that asked for them, so a VPN or
+  // proxy that changes address between requests is refused too.
+  if (/HTTP Error 403/i.test(line)) {
+    return 'YouTube refused the video data (HTTP 403). Update yt-dlp in Options → General and retry; if it persists, turn off any VPN or proxy, or send the video from the browser extension.';
+  }
+  if (/Requested format is not available/i.test(line)) {
+    return hasFfmpeg
+      ? 'YouTube did not offer a downloadable format for this video. Update yt-dlp in Options → General and try again.'
+      : 'This video has no single-file version. Install FFmpeg in Options → General (one click), then retry.';
+  }
   return line.replace(/^ERROR:\s*(\[[^\]]+\]\s*)?/, '');
 }
 
