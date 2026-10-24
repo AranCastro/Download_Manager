@@ -364,6 +364,10 @@ function registerIpc() {
   });
   handle('dm:check-ffmpeg', (bin) => findFfmpeg(bin ?? manager.settings.ffmpegPath));
   handle('dm:probe', (options) => manager.probe(options));
+  handle('dm:tools', () => manager.toolStatus());
+  handle('dm:install-tool', (name) =>
+    manager.installTool(name, { onProgress: (progress) => send('dm:tool-progress', { name, ...progress }) }),
+  );
   handle('dm:platform', () => process.platform);
   handle('dm:titlebar', (colours) => {
     if (process.platform !== 'darwin' && mainWindow && colours?.color) {

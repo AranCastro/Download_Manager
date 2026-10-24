@@ -36,7 +36,7 @@ export function formatDate(ms) {
 export function percent(d) {
   if (d.status === 'completed') return 100;
   // Streams count finished segments; their byte total is only an estimate.
-  if (d.kind && d.kind !== 'file') return d.segmentsTotal ? (d.segmentsDone / d.segmentsTotal) * 100 : null;
+  if (d.kind === 'hls' || d.kind === 'dash') return d.segmentsTotal ? (d.segmentsDone / d.segmentsTotal) * 100 : null;
   if (!d.totalBytes) return null;
   return Math.min(100, (d.downloadedBytes / d.totalBytes) * 100);
 }
@@ -45,8 +45,11 @@ export const formatSize = (d) => `${d.sizeIsEstimate ? '~' : ''}${formatBytes(d.
 
 export const KIND_LABELS = { hls: 'HLS', dash: 'DASH' };
 
+export const isYouTube = (url) => /(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com)$/i.test(hostOf(url));
+
 export function protocolLabel(d) {
   if (KIND_LABELS[d.kind]) return KIND_LABELS[d.kind];
+  if (d.kind === 'site') return isYouTube(d.url) ? 'YouTube' : 'Video';
   return /^ftps?:/i.test(d.url) ? 'FTP' : null;
 }
 

@@ -2486,3 +2486,30 @@ table.downloads {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Video page (YouTube) link check */
+.probe-video {
+  align-items: flex-start;
+}
+
+.probe-thumb {
+  flex: none;
+  width: 128px;
+  height: 72px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--surface-3);
+}
+
+.probe-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.35;
+}
+
+.probe .btn-small {
+  flex: none;
+  margin-left: auto;
+}

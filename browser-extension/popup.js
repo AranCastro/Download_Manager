@@ -53,12 +53,43 @@ function nameFor(entry, tab) {
   return title.slice(0, 120) || undefined;
 }
 
+const isYouTubeVideo = (url) => {
+  try {
+    const u = new URL(url);
+    return /(^|\.)youtube\.com$/.test(u.hostname) && ((u.pathname === '/watch' && u.searchParams.has('v')) || u.pathname.startsWith('/shorts/'));
+  } catch {
+    return false;
+  }
+};
+
+// On a YouTube video the page itself is offered: the app picks the quality
+// and downloads it with yt-dlp.
+function renderPageVideo(tab) {
+  const show = isYouTubeVideo(tab?.url);
+  $('page-video').hidden = !show;
+  if (!show) return;
+  $('page-video-title').textContent = (tab.title || '').replace(/\s*-\s*YouTube$/, '') || tab.url;
+  const button = $('page-video-download');
+  button.onclick = async () => {
+    button.disabled = true;
+    try {
+      await send({ type: 'download-page', url: tab.url, storeId: tab.cookieStoreId });
+      button.textContent = 'Sent to Anabranch';
+    } catch (err) {
+      button.disabled = false;
+      showError(err);
+    }
+  };
+}
+
 async function renderMedia() {
   const tab = await activeTab();
+  renderPageVideo(tab);
   const { media } = await send({ type: 'media', tabId: tab.id });
   const list = $('media');
   list.replaceChildren();
-  $('no-media').hidden = media.length > 0;
+  $('no-media').hidden = media.length > 0 || isYouTubeVideo(tab.url);
+  $('media-heading').hidden = !media.length && isYouTubeVideo(tab.url);
   for (const entry of media) {
     const li = document.createElement('li');
     const badge = document.createElement('span');

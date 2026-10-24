@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { Icon } from '../icons.jsx';
-import { formatBytes, formatClock, hostOf } from '../format.js';
+import { formatBytes, formatClock, hostOf, isYouTube } from '../format.js';
 import { Modal } from './Modal.jsx';
 
 const URL_PATTERN = /^(https?|ftps?):\/\/\S+$/i;
@@ -10,6 +10,7 @@ const MAX_PROBES = 25;
 const cleanError = (err) => String(err?.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
 
 const extensionKind = (url) => {
+  if (isYouTube(url)) return 'site';
   const path = (() => {
     try {
       return new URL(url).pathname.toLowerCase();
@@ -22,8 +23,44 @@ const extensionKind = (url) => {
   return 'file';
 };
 
-// What the server told us about one link, shown before anything downloads.
-function ProbeCard({ result, url }) {
+// Only thumbnails from YouTube's image servers are shown (the page's
+// Content-Security-Policy allows no other remote images).
+const safeThumbnail = (url) => (/^https:\/\/i\.ytimg\.com\//.test(url || '') ? url : null);
+
+function InstallYtDlp({ onInstalled }) {
+  const [state, setState] = useState(null);
+  useEffect(() => api.onToolProgress?.((p) => p.name === 'ytdlp' && setState({ busy: true, ...p })), []);
+  const install = async () => {
+    setState({ busy: true });
+    try {
+      await api.installTool('ytdlp');
+      setState(null);
+      onInstalled();
+    } catch (err) {
+      setState({ error: cleanError(err) });
+    }
+  };
+  return (
+    <div className="probe probe-warn" role="status">
+      <Icon name="download" size={18} />
+      <span className="probe-text">
+        <strong>Video pages need yt-dlp</strong>
+        <span className="muted small">
+          {state?.error ||
+            (state?.busy
+              ? `Downloading yt-dlp… ${state.done ? `${formatBytes(state.done)}${state.total ? ` of ${formatBytes(state.total)}` : ''}` : ''}`
+              : 'A free, open-source tool that reads YouTube and other video sites. About 35 MB, installed into Anabranch’s own folder.')}
+        </span>
+      </span>
+      <button type="button" className="btn btn-primary btn-small" disabled={state?.busy} onClick={install}>
+        {state?.busy ? <span className="spinner spinner-small" /> : <Icon name="download" size={14} />} Install
+      </button>
+    </div>
+  );
+}
+
+// What the server (or yt-dlp) told us about one link.
+function ProbeCard({ result, url, onTryAsPage, onInstalled }) {
   if (!result || result === 'loading') {
     return (
       <div className="probe probe-loading" aria-live="polite">
@@ -32,6 +69,7 @@ function ProbeCard({ result, url }) {
       </div>
     );
   }
+  if (result.toolMissing === 'ytdlp') return <InstallYtDlp onInstalled={onInstalled} />;
   if (result.authRequired) {
     return (
       <div className="probe probe-warn" role="status">
@@ -50,6 +88,46 @@ function ProbeCard({ result, url }) {
         <span>
           <strong>Could not check this link</strong>
           <span className="muted"> · {result.error}</span>
+        </span>
+      </div>
+    );
+  }
+  if (result.isWebPage) {
+    return (
+      <div className="probe probe-warn" role="status">
+        <Icon name="globe" size={18} />
+        <span className="probe-text">
+          <strong>This link opens a web page, not a file</strong>
+          <span className="muted small">If the page plays a video, Anabranch can look for it with yt-dlp.</span>
+        </span>
+        <button type="button" className="btn btn-small" onClick={onTryAsPage}>
+          <Icon name="Video" size={14} /> Find the video
+        </button>
+      </div>
+    );
+  }
+  if (result.kind === 'site') {
+    const thumb = safeThumbnail(result.thumbnail);
+    const chips = [
+      result.site,
+      result.uploader,
+      result.duration ? formatClock(result.duration) : null,
+      result.qualities?.length ? `up to ${result.qualities[0].height}p` : null,
+    ];
+    return (
+      <div className="probe probe-ok probe-video" role="status">
+        {thumb ? (
+          <img className="probe-thumb" src={thumb} alt="" />
+        ) : (
+          <span className="row-icon cat-Video"><Icon name="Video" size={20} /></span>
+        )}
+        <span className="probe-text">
+          <strong className="probe-title" title={result.title}>{result.title}</strong>
+          <span className="probe-chips">
+            {chips.filter(Boolean).map((c) => (
+              <span key={c} className="chip chip-quiet">{c}</span>
+            ))}
+          </span>
         </span>
       </div>
     );
@@ -85,28 +163,38 @@ function ProbeCard({ result, url }) {
   );
 }
 
-function BatchList({ urls, results }) {
+function batchState(r, label) {
+  if (label) return label.duration ? formatClock(label.duration) : '';
+  if (!r || r === 'loading') return <span className="spinner spinner-small" />;
+  if (r.authRequired) return 'Sign-in';
+  if (r.error) return 'Error';
+  if (r.totalBytes != null) return formatBytes(r.totalBytes);
+  if (r.duration) return formatClock(r.duration);
+  return r.kind !== 'file' ? r.site || r.kind.toUpperCase() : '—';
+}
+
+function BatchList({ title, urls, results, labels = {} }) {
   const sizes = urls.map((u) => results[u]?.totalBytes).filter((n) => n != null);
-  const done = urls.filter((u) => results[u] && results[u] !== 'loading').length;
+  const done = urls.filter((u) => labels[u] || (results[u] && results[u] !== 'loading')).length;
+  const checking = Math.min(urls.length, MAX_PROBES);
   return (
     <div className="batch">
       <div className="batch-head">
-        <span>{urls.length} links</span>
+        <span>{title || `${urls.length} links`}</span>
         <span className="muted">
-          {done < Math.min(urls.length, MAX_PROBES) ? `Checking ${done}/${Math.min(urls.length, MAX_PROBES)}…` : ''}
+          {done < checking ? `Checking ${done}/${checking}…` : ''}
           {sizes.length ? ` ${formatBytes(sizes.reduce((a, b) => a + b, 0))} known` : ''}
         </span>
       </div>
       <ul>
-        {urls.slice(0, 200).map((u) => {
+        {urls.slice(0, 300).map((u) => {
           const r = results[u];
+          const label = labels[u];
           return (
             <li key={u}>
-              <Icon name={r && r !== 'loading' && !r.error ? r.category : 'link'} size={15} />
-              <span className="ellipsis" title={u}>{r?.fileName || u}</span>
-              <span className={`batch-state ${r?.error ? 'meta-danger' : ''}`}>
-                {!r || r === 'loading' ? <span className="spinner spinner-small" /> : r.authRequired ? 'Sign-in' : r.error ? 'Error' : r.totalBytes != null ? formatBytes(r.totalBytes) : r.kind !== 'file' ? r.kind.toUpperCase() : '—'}
-              </span>
+              <Icon name={label ? 'Video' : r && r !== 'loading' && !r.error ? r.category || 'Video' : 'link'} size={15} />
+              <span className="ellipsis" title={u}>{label?.title || r?.title || r?.fileName || u}</span>
+              <span className={`batch-state ${r?.error && !label ? 'meta-danger' : ''}`}>{batchState(r, label)}</span>
             </li>
           );
         })}
@@ -130,29 +218,38 @@ export function AddDialog({ items = [], settings, onClose }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState({});
+  const [kindOverride, setKindOverride] = useState({});
+  const [probeKey, setProbeKey] = useState(0);
   const probeRound = useRef(0);
 
   const urls = useMemo(() => [...new Set(text.split(/\s+/).map((u) => u.trim()).filter(Boolean))], [text]);
   const validUrls = urls.filter((u) => URL_PATTERN.test(u));
   const single = urls.length <= 1;
-  const kinds = urls.map((u) => byUrl.get(u)?.kind || results[u]?.kind || extensionKind(u));
-  const hasStream = kinds.some((k) => k !== 'file');
-  const fromBrowser = urls.some((u) => byUrl.get(u)?.headers?.Cookie || byUrl.get(u)?.headers?.Referer);
+  const kindFor = (u) =>
+    byUrl.get(u)?.kind || kindOverride[u] || (results[u]?.kind && results[u].kind !== 'file' ? results[u].kind : null) || extensionKind(u);
   const first = results[validUrls[0]];
-  const qualities = single && first && first !== 'loading' ? first.qualities || [] : [];
+  // A playlist link expands into one download per video.
+  const playlist = single && first && first !== 'loading' && first.entries ? first : null;
+  const targets = playlist ? playlist.entries.map((e) => e.url) : urls;
+  const kinds = targets.map((u) => (playlist ? 'site' : kindFor(u)));
+  const hasStream = kinds.some((k) => k !== 'file');
+  const hasSite = kinds.includes('site');
+  const fromBrowser = urls.some((u) => byUrl.get(u)?.headers?.Cookie || byUrl.get(u)?.headers?.Referer);
+  const qualities = single && first && first !== 'loading' && !playlist ? first.qualities || [] : [];
 
-  // Check the links shortly after typing stops (and again when a login is entered).
+  // Check the links shortly after typing stops, and again when a login is
+  // entered, yt-dlp is installed or a page is to be read as a video page.
   useEffect(() => {
     const round = ++probeRound.current;
-    const targets = validUrls.slice(0, MAX_PROBES);
-    if (!targets.length) return undefined;
+    const toProbe = validUrls.slice(0, MAX_PROBES);
+    if (!toProbe.length) return undefined;
     const login = showLogin && username ? { username, password } : {};
     const timer = setTimeout(() => {
-      setResults((prev) => Object.fromEntries(targets.map((u) => [u, prev[u] && !login.username ? prev[u] : 'loading'])));
-      for (const url of targets) {
+      setResults((prev) => Object.fromEntries(toProbe.map((u) => [u, prev[u] && !login.username && !probeKey && !kindOverride[u] ? prev[u] : 'loading'])));
+      for (const url of toProbe) {
         const source = byUrl.get(url);
         api
-          .probe({ url, kind: source?.kind, headers: source?.headers, ...login })
+          .probe({ url, kind: source?.kind || kindOverride[url], headers: source?.headers, ...login })
           .catch((err) => ({ error: cleanError(err) }))
           .then((result) => {
             if (probeRound.current === round) setResults((prev) => ({ ...prev, [url]: result }));
@@ -161,7 +258,7 @@ export function AddDialog({ items = [], settings, onClose }) {
     }, 450);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [validUrls.join('\n'), showLogin && username, showLogin && password]);
+  }, [validUrls.join('\n'), showLogin && username, showLogin && password, probeKey, JSON.stringify(kindOverride)]);
 
   // A server that asks for a sign-in opens the login fields.
   useEffect(() => {
@@ -175,13 +272,13 @@ export function AddDialog({ items = [], settings, onClose }) {
     if (invalid) return setError(`Not an http(s) or ftp address: ${invalid}`);
     setBusy(true);
     try {
-      for (const [i, url] of urls.entries()) {
-        const source = byUrl.get(url);
+      for (const [i, url] of targets.entries()) {
+        const source = byUrl.get(url) || (playlist ? byUrl.get(urls[0]) : null);
         await api.add({
           url,
-          kind: source?.kind,
+          kind: kinds[i],
           headers: source?.headers,
-          fileName: single && fileName.trim() ? fileName.trim() : source?.fileName,
+          fileName: playlist ? undefined : single && fileName.trim() ? fileName.trim() : source?.fileName,
           directory: directory || undefined,
           connections: Number(connections),
           quality: kinds[i] !== 'file' ? quality : undefined,
@@ -191,7 +288,7 @@ export function AddDialog({ items = [], settings, onClose }) {
           schedule: mode === 'schedule',
         });
       }
-      onClose({ added: urls.length, mode });
+      onClose({ added: targets.length, mode });
     } catch (err) {
       setError(cleanError(err));
       setBusy(false);
@@ -203,11 +300,15 @@ export function AddDialog({ items = [], settings, onClose }) {
     if (dir) setDirectory(dir);
   };
 
-  const placeholderName = single && first && first !== 'loading' && first.fileName ? first.fileName : hasStream ? 'Automatic (saved as .mp4)' : 'Automatic (from the server)';
+  const probed = single && first && first !== 'loading' ? first : null;
+  const placeholderName = probed?.title || probed?.fileName || (hasStream ? 'Automatic (saved as .mp4)' : 'Automatic (from the server)');
+  const playlistLabels = playlist ? Object.fromEntries(playlist.entries.map((e) => [e.url, e])) : {};
+  const audioOnly = quality === 'audio' || quality === 'mp3';
+  const folderHint = hasSite ? `: ${audioOnly ? 'Music' : 'Video'}` : '';
 
   return (
     <Modal
-      title={urls.length > 1 ? `Add ${urls.length} downloads` : 'New download'}
+      title={playlist ? `Add playlist (${targets.length} videos)` : urls.length > 1 ? `Add ${urls.length} downloads` : 'New download'}
       onClose={() => onClose()}
       wide
       footer={
@@ -218,8 +319,8 @@ export function AddDialog({ items = [], settings, onClose }) {
           <span className="spacer" />
           <button type="button" className="btn" onClick={() => onClose()}>Cancel</button>
           <button type="button" className="btn" disabled={busy} onClick={() => submit('later')}>Add paused</button>
-          <button type="button" className="btn btn-primary" disabled={busy || !urls.length} onClick={() => submit('start')}>
-            <Icon name="download" size={15} /> Download{urls.length > 1 ? ` ${urls.length}` : ''}
+          <button type="button" className="btn btn-primary" disabled={busy || !urls.length || Boolean(first?.toolMissing)} onClick={() => submit('start')}>
+            <Icon name="download" size={15} /> Download{targets.length > 1 ? ` ${targets.length}` : ''}
           </button>
         </>
       }
@@ -229,7 +330,7 @@ export function AddDialog({ items = [], settings, onClose }) {
         <textarea
           autoFocus
           rows={single ? 2 : 4}
-          placeholder="Paste a link to a file, an FTP address or a video stream (.m3u8, .mpd). Several links: one per line."
+          placeholder="Paste a link: a file, an FTP address, a video stream (.m3u8, .mpd) or a YouTube video or playlist. Several links: one per line."
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && (e.ctrlKey || e.metaKey) && submit('start')}
@@ -242,10 +343,18 @@ export function AddDialog({ items = [], settings, onClose }) {
           <Icon name="globe" size={14} /> Sent from your browser with its cookies and referrer, so signed-in downloads work.
         </p>
       )}
-      {single && validUrls[0] && <ProbeCard result={results[validUrls[0]]} url={validUrls[0]} />}
+      {single && validUrls[0] && !playlist && (
+        <ProbeCard
+          result={results[validUrls[0]]}
+          url={validUrls[0]}
+          onTryAsPage={() => setKindOverride((k) => ({ ...k, [validUrls[0]]: 'site' }))}
+          onInstalled={() => setProbeKey((n) => n + 1)}
+        />
+      )}
+      {playlist && <BatchList title={`${playlist.playlist.title} · ${targets.length} videos`} urls={targets} results={{}} labels={playlistLabels} />}
       {!single && <BatchList urls={urls} results={results} />}
 
-      {single && (
+      {single && !playlist && (
         <label className="field">
           <span>Save as</span>
           <input type="text" placeholder={placeholderName} value={fileName} onChange={(e) => setFileName(e.target.value)} />
@@ -254,7 +363,11 @@ export function AddDialog({ items = [], settings, onClose }) {
       <div className="field">
         <span>Save to</span>
         <div className="field-row">
-          <input type="text" readOnly value={directory || (settings.categoryFolders ? `${settings.downloadDir}  (sorted by category)` : settings.downloadDir)} />
+          <input
+            type="text"
+            readOnly
+            value={directory || (settings.categoryFolders ? `${settings.downloadDir}  (sorted by category${folderHint})` : settings.downloadDir)}
+          />
           <button type="button" className="btn" onClick={browse}>Browse…</button>
           {directory && (
             <button type="button" className="btn btn-ghost" onClick={() => setDirectory('')}>Default</button>
@@ -270,7 +383,7 @@ export function AddDialog({ items = [], settings, onClose }) {
         </label>
         {hasStream && (
           <label className="field">
-            <span>Video quality</span>
+            <span>{hasSite ? 'Quality' : 'Video quality'}</span>
             <select value={quality} onChange={(e) => setQuality(e.target.value)}>
               <option value="best">Best available{qualities[0] ? ` (${qualities[0].height}p)` : ''}</option>
               {qualities.map((q) => (
@@ -285,16 +398,31 @@ export function AddDialog({ items = [], settings, onClose }) {
                   <option value="480">Up to 480p</option>
                 </>
               )}
-              <option value="worst">Smallest</option>
+              {hasSite && (
+                <>
+                  <option value="audio">Audio only (M4A)</option>
+                  <option value="mp3">Audio only (MP3)</option>
+                </>
+              )}
+              {!hasSite && <option value="worst">Smallest</option>}
             </select>
           </label>
         )}
       </div>
-      <label className="check">
-        <input type="checkbox" checked={showLogin} onChange={(e) => setShowLogin(e.target.checked)} />
-        This server needs a sign-in
-      </label>
-      {showLogin && (
+      {hasSite && (
+        <p className="hint">
+          <Icon name="info" size={14} /> Save only videos you have the right to download, such as your own uploads or videos under a
+          Creative Commons licence.
+        </p>
+      )}
+      {/* Video sites sign in with the browser's cookies (sent by the extension), not a password. */}
+      {!kinds.every((k) => k === 'site') && (
+        <label className="check">
+          <input type="checkbox" checked={showLogin} onChange={(e) => setShowLogin(e.target.checked)} />
+          This server needs a sign-in
+        </label>
+      )}
+      {showLogin && !kinds.every((k) => k === 'site') && (
         <div className="grid-2 login-fields">
           <label className="field">
             <span>User name</span>

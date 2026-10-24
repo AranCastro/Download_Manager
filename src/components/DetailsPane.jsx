@@ -42,6 +42,36 @@ function PieceMap({ d }) {
   );
 }
 
+// Video pages: yt-dlp reports bytes only, so one bar shows overall progress.
+function SiteBar({ d }) {
+  const p = d.status === 'completed' ? 100 : percent(d) ?? 0;
+  return (
+    <div className="segmap">
+      <div className={`segmap-fill ${d.status === 'completed' ? 'done' : 'active'}`} style={{ left: 0, width: `${p}%` }} />
+    </div>
+  );
+}
+
+function Source({ d }) {
+  const info = d.siteInfo || {};
+  return (
+    <dl className="kv">
+      <dt>Site</dt>
+      <dd>{info.site || protocolLabel(d)}</dd>
+      <dt>Title</dt>
+      <dd>{info.title || '—'}</dd>
+      <dt>Channel</dt>
+      <dd>{info.uploader || '—'}</dd>
+      <dt>Duration</dt>
+      <dd>{info.duration ? formatClock(info.duration) : '—'}</dd>
+      <dt>Quality</dt>
+      <dd>{{ best: 'Best available', audio: 'Audio only (M4A)', mp3: 'Audio only (MP3)' }[d.quality] || `Up to ${d.quality}p`}</dd>
+      <dt>Handled by</dt>
+      <dd>yt-dlp{d.headers?.Cookie ? ', with your browser sign-in' : ''}</dd>
+    </dl>
+  );
+}
+
 function Stat({ label, value, mono }) {
   return (
     <div className="stat">
@@ -53,15 +83,22 @@ function Stat({ label, value, mono }) {
 
 function Overview({ d, isStream }) {
   const info = d.streamInfo;
+  const isSite = d.kind === 'site';
   return (
     <div className="overview">
-      {isStream ? <PieceMap d={d} /> : <SegmentMap d={d} />}
+      {isSite ? <SiteBar d={d} /> : isStream ? <PieceMap d={d} /> : <SegmentMap d={d} />}
       <div className="stats">
         <Stat label="Downloaded" value={`${formatBytes(d.downloadedBytes)} of ${formatSize(d)}`} />
         <Stat label="Speed" value={formatSpeed(d.speed)} />
         <Stat label="Time left" value={d.status === 'downloading' ? formatDuration(d.eta) : ''} />
-        <Stat label="Connections" value={d.status === 'downloading' ? `${d.activeConnections} of ${d.connections}` : `${d.connections} max`} />
-        {isStream ? (
+        {isSite ? (
+          <Stat label="Video" value={d.siteInfo?.height ? `${d.siteInfo.height}p` : d.quality === 'audio' || d.quality === 'mp3' ? 'Audio only' : ''} />
+        ) : (
+          <Stat label="Connections" value={d.status === 'downloading' ? `${d.activeConnections} of ${d.connections}` : `${d.connections} max`} />
+        )}
+        {isSite ? (
+          <Stat label="Channel" value={d.siteInfo?.uploader} />
+        ) : isStream ? (
           <Stat label="Video" value={info?.height ? `${info.width}×${info.height}${info.bandwidth ? ` · ${(info.bandwidth / 1e6).toFixed(1)} Mbit/s` : ''}` : ''} />
         ) : (
           <Stat label="Resumable" value={d.probed === false ? 'Not checked yet' : d.resumable ? 'Yes' : 'No'} />
@@ -158,7 +195,7 @@ export function DetailsPane({ download: d, samples, onLogin, onClose }) {
   const p = percent(d);
   const tabs = [
     ['overview', 'Overview'],
-    ['connections', isStream ? 'Tracks' : `Connections${d.segments?.length ? ` (${d.segments.length})` : ''}`],
+    ['connections', d.kind === 'site' ? 'Source' : isStream ? 'Tracks' : `Connections${d.segments?.length ? ` (${d.segments.length})` : ''}`],
     ['speed', 'Speed'],
   ];
   return (
@@ -172,6 +209,8 @@ export function DetailsPane({ download: d, samples, onLogin, onClose }) {
             {p != null && d.status !== 'completed' ? ` · ${p.toFixed(1)}%` : ''}
             {protocolLabel(d) ? ` · ${protocolLabel(d)}` : ''}
             {isStream && d.streamInfo?.duration ? ` · ${formatClock(d.streamInfo.duration)}` : ''}
+            {d.kind === 'site' && d.siteInfo?.duration ? ` · ${formatClock(d.siteInfo.duration)}` : ''}
+            {d.kind === 'site' && d.siteInfo?.uploader ? ` · ${d.siteInfo.uploader}` : ''}
           </span>
         </div>
         <div className="details-actions">
@@ -205,7 +244,7 @@ export function DetailsPane({ download: d, samples, onLogin, onClose }) {
       </div>
       <div className="details-body">
         {tab === 'overview' && <Overview d={d} isStream={isStream} />}
-        {tab === 'connections' && <Connections d={d} isStream={isStream} />}
+        {tab === 'connections' && (d.kind === 'site' ? <Source d={d} /> : <Connections d={d} isStream={isStream} />)}
         {tab === 'speed' && (
           samples?.length > 1 ? (
             <SpeedChart samples={samples} height={150} title="Transfer rate of this download" />

@@ -34,23 +34,24 @@
 | Dynamic segmentation | A connection that finishes early takes over half of the largest remaining range, so that all connections stay busy until the end. |
 | FTP and FTPS | `ftp://` and `ftps://` (implicit TLS) URLs support multiple connections and resume. Anonymous login is used unless credentials are supplied. When a server limits connections, the downloader continues with the connections it was granted. |
 | Video streams (HLS and DASH) | `.m3u8` and `.mpd` URLs are resolved to their segments, which download in parallel. AES-128-encrypted HLS is decrypted. The quality can be set to best, worst, or a maximum height. When FFmpeg is present, the segments are merged into one MP4 file. |
-| Browser integration | The extension hands downloads of chosen file types to the app, together with the browser's cookies and referrer, so that downloads behind a sign-in still work. It also adds right-click menus (*Download with Anabranch* and *Download all links*) and lists the video streams a page loads. |
+| YouTube | Watch pages, Shorts, `youtu.be` links and playlists download through [yt-dlp](https://github.com/yt-dlp/yt-dlp), which the app installs in one click. The Add dialog shows the title, channel, duration and the qualities on offer (up to 4K), or *Audio only* as M4A or MP3. A playlist becomes one download per video. Pause and resume work as for other downloads. |
+| Browser integration | The extension hands downloads of chosen file types to the app, together with the browser's cookies and referrer, so that downloads behind a sign-in still work. It also adds right-click menus (*Download with Anabranch* and *Download all links*), lists the video streams a page loads, and puts a **Download** button on YouTube's player. |
 | Scheduler | Scheduled downloads start at a set time on chosen weekdays, with an optional stop time. When the queue finishes, the app can do nothing, close, put the computer to sleep or shut it down, after a 60-second countdown that can be cancelled. |
 | Login prompts | When a server answers HTTP 401 (Basic or Digest) or FTP 530, the download pauses and the app asks for credentials. A login can be remembered for the whole site. Logins and cookies are encrypted with Windows DPAPI (Data Protection API) and are never written to the download list. |
 | Pause and resume | Downloads continue from the saved offsets, including after a restart. A stream resumes from the last segment it completed. |
 | Queue and speed limit | A set number of downloads run at once, and a global speed limit in KB/s applies to all connections. |
 | Categories | Files are sorted into Compressed, Documents, Music, Programs, Video and Other, optionally into a sub-folder for each category. |
 | Clipboard capture | Copying a direct file link opens the Add dialog with that link. |
-| MCP server | 16 tools for checking links, downloads, logins, the scheduler and settings. |
+| MCP server | 16 tools for checking links (YouTube included), downloads, logins, the scheduler and settings. |
 
 ## Download the `.exe`
 
 GitHub Actions builds the app and runs the tests on Windows on every push. Open the **Actions** tab, select the latest **Build Windows exe** run, and download these artifacts:
 
-- **anabranch-windows** contains `Anabranch-Setup-1.1.0.exe` (an installer) and `Anabranch-Portable-1.1.0.exe` (one file, no installation).
+- **anabranch-windows** contains `Anabranch-Setup-1.2.0.exe` (an installer) and `Anabranch-Portable-1.2.0.exe` (one file, no installation).
 - **browser-extension** contains the extension as zip files for Chromium-based browsers and for Firefox.
 
-When a tag such as `v1.1.0` is pushed, the workflow also attaches these files to a GitHub Release. The executables are not code-signed, so Windows SmartScreen shows a warning on first launch; select **More info → Run anyway**.
+When a tag such as `v1.2.0` is pushed, the workflow also attaches these files to a GitHub Release. The executables are not code-signed, so Windows SmartScreen shows a warning on first launch; select **More info → Run anyway**.
 
 ## Browser extension
 
@@ -61,6 +62,18 @@ The installed app contains the extension in `resources\browser-extension\`. **Op
 3. Click the Anabranch button in the browser toolbar, then **Connect**. Approve the request in the app window.
 
 Pairing gives each browser its own token; the app stores only a hash of it. **Options → Browser** lists the connected browsers, and each one can be disconnected there. The toolbar panel controls which file types are captured, the minimum file size, the sites to skip, and whether each download is confirmed in the app first. If the app is closed when a download starts, the extension returns the download to the browser.
+
+## YouTube
+
+1. The first YouTube link opens a card in the Add dialog with **Install yt-dlp**. The app downloads the official build from the yt-dlp GitHub releases into `%APPDATA%\Anabranch\tools\`. **Options → General** shows the installed version, updates it, or points to a copy of your own.
+2. For HD and 4K, YouTube serves video and audio separately, and FFmpeg joins them. On Windows, **Options → General → Install FFmpeg** fetches a static build into the same folder. Without FFmpeg the app takes the best single-file format (usually 720p or lower), and *Audio only* saves M4A instead of MP3.
+3. Paste a link, press **Ctrl+V** anywhere in the window, or use the browser extension: hover over the player and click **Download**, or open the toolbar panel and choose **Download this video**.
+
+The extension sends the browser's YouTube cookies with the link, so signed-in, members-only and age-restricted videos you can watch in the browser also download. YouTube sometimes asks a downloader to confirm that it is not a bot, mostly on shared or datacenter networks. When the app reports this, send the video from the browser extension. Live streams and DRM-protected videos (for example, purchased films) are refused.
+
+![Add dialog with a YouTube video](docs/screenshot-youtube.png)
+
+Download only videos you own or have permission to save, and follow YouTube's Terms of Service and the copyright law of your country.
 
 ## Video streams and FFmpeg
 
@@ -98,14 +111,14 @@ Live streams, and streams protected by DRM (Widevine, PlayReady, FairPlay, HLS S
 
 | Tool | Purpose |
 | --- | --- |
-| `probe_url` | Check a link without downloading it: name, size, resume support, stream qualities and duration. |
-| `add_download` | Queue a file, FTP link or `.m3u8`/`.mpd` stream. Optional inputs: file name, folder, connections, quality, login, extra headers, start now or schedule. |
+| `probe_url` | Check a link without downloading it: name, size, resume support, stream qualities and duration; for a YouTube link, the title, channel and qualities, or a playlist's videos. |
+| `add_download` | Queue a file, FTP link, `.m3u8`/`.mpd` stream or YouTube video (kind `site`; quality `best`, a height such as `1080`, `audio` or `mp3`). Optional inputs: file name, folder, connections, quality, login, extra headers, start now or schedule. |
 | `list_downloads` / `get_download` | Report status, progress, speed and segments. |
 | `pause_download` / `resume_download` / `pause_all` / `resume_all` | Stop or continue downloads. Resuming a failed download retries it. |
 | `remove_download` | Remove a download from the list, and optionally delete the file. |
 | `set_credentials` | Supply a login for a download in the `auth-required` state, and retry it. |
 | `schedule_download` / `get_scheduler` / `update_scheduler` / `run_scheduler_now` | Manage the scheduled queue and its times, days and after-done action. |
-| `get_settings` / `update_settings` | Folder, concurrency, connections, speed limit and FFmpeg path. |
+| `get_settings` / `update_settings` | Folder, concurrency, connections, speed limit, and the FFmpeg and yt-dlp paths. |
 
 Example prompt: *"Download the DEM tiles listed at these three FTP links tonight at 1:30 with 4 connections each, then put the computer to sleep."*
 
@@ -139,7 +152,7 @@ Requirements: Node.js 20 or later. FFmpeg is optional; the tests that need it ar
 ```bash
 npm install
 npm run dev        # Vite dev server + Electron with hot reload
-npm test           # 29 tests: engine, HTTP auth, FTP, HLS/DASH, probing, scheduler, API, MCP
+npm test           # 37 tests: engine, HTTP auth, FTP, HLS/DASH, YouTube (with a stand-in yt-dlp), probing, scheduler, API, MCP
 npm run build      # renderer, MCP bundle, browser extension (dist-extension/)
 npm run dist:win   # Windows installer and portable exe in release/
 ```
@@ -162,9 +175,12 @@ electron/
     streams/hls.js           HLS playlist parsing, variant choice, AES-128 IVs
     streams/dash.js          DASH manifest resolution (templates, timelines, segment lists)
     streams/StreamDownload.js  parallel segment download, decryption, assembly, FFmpeg merge
+    sites/ytdlp.js           yt-dlp arguments, output parsing, error messages
+    sites/SiteDownload.js    YouTube and other video pages, run through yt-dlp
+    tools.js                 finding and installing yt-dlp and FFmpeg
     Scheduler.js             start/stop times and weekdays
     CredentialStore.js       encrypted logins and cookies
-browser-extension/           extension source (one codebase for MV3 Chromium and MV2 Firefox)
+browser-extension/           extension source (one codebase for MV3 Chromium and MV2 Firefox); youtube.js adds the player button
 mcp/server.mjs               MCP server (bundled to dist-mcp/ by esbuild)
 src/                         React interface
 test/                        node:test suites
@@ -174,7 +190,8 @@ Settings, the download list, encrypted secrets and browser pairings are stored i
 
 ## Known limitations
 
-- Live streams, DRM-protected streams, and sites with proprietary players (for example, YouTube) are not supported.
+- Live streams and DRM-protected streams or videos are not supported.
+- YouTube support depends on yt-dlp. When YouTube changes its site, update yt-dlp under **Options → General**. The app does not work around YouTube's bot check; the browser extension's cookies are the supported route.
 - For a DASH manifest with several periods, only the first period is downloaded.
 - Supported logins are HTTP Basic, HTTP Digest and FTP. NTLM and Kerberos are not supported; form-based sign-ins work through the browser extension, which passes the session cookies.
 - The extension is not published in the Chrome Web Store or on addons.mozilla.org. It is loaded unpacked (Chromium) or as a temporary add-on (Firefox).
