@@ -7,7 +7,7 @@ import { zipDirectory } from './zip.mjs';
 const { version } = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const source = 'browser-extension';
 const out = 'dist-extension';
-const files = ['background.js', 'popup.html', 'popup.js', 'popup.css', 'icons'];
+const files = ['background.js', 'youtube.js', 'popup.html', 'popup.js', 'popup.css', 'icons'];
 const icons = Object.fromEntries([16, 32, 48, 128].map((s) => [s, `icons/icon-${s}.png`]));
 
 const common = {
@@ -15,8 +15,11 @@ const common = {
   short_name: 'Anabranch',
   version,
   description:
-    'Sends downloads, links and detected video streams (HLS/DASH) to the Anabranch desktop app.',
+    'Sends downloads, links, YouTube videos and detected video streams (HLS/DASH) to the Anabranch desktop app.',
   icons,
+  content_scripts: [
+    { matches: ['https://www.youtube.com/*', 'https://m.youtube.com/*'], js: ['youtube.js'], run_at: 'document_idle' },
+  ],
 };
 
 const manifests = {
@@ -35,7 +38,9 @@ const manifests = {
     permissions: ['downloads', 'contextMenus', 'cookies', 'storage', 'webRequest', 'webNavigation', 'tabs', '<all_urls>'],
     background: { scripts: ['background.js'] },
     browser_action: { default_popup: 'popup.html', default_title: 'Anabranch', default_icon: icons },
-    browser_specific_settings: { gecko: { id: 'anabranch@draran.online', strict_min_version: '115.0' } },
+    browser_specific_settings: {
+      gecko: { id: 'anabranch@draran.online', strict_min_version: '115.0', data_collection_permissions: { required: ['none'] } },
+    },
   },
 };
 

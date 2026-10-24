@@ -11,7 +11,8 @@ const csp = {
       tag: 'meta',
       attrs: {
         'http-equiv': 'Content-Security-Policy',
-        content: "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:",
+        // Video thumbnails come from YouTube's image servers.
+        content: "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.ytimg.com",
       },
       injectTo: 'head-prepend',
     },

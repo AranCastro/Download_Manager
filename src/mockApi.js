@@ -214,6 +214,31 @@ export function createMockApi() {
       await new Promise((r) => setTimeout(r, 700));
       const name = decodeURIComponent(new URL(url).pathname.split('/').pop() || 'download');
       if (/secure|portal/.test(url)) return { url, kind: 'file', authRequired: true, realm: 'Data portal', error: 'Login required' };
+      if (/youtube\.com\/playlist/.test(url)) {
+        return {
+          url,
+          kind: 'site',
+          site: 'YouTube',
+          playlist: { title: 'Remote Sensing Basics', count: 4 },
+          entries: ['Electromagnetic spectrum', 'Spectral signatures', 'Image classification', 'Accuracy assessment'].map((t, i) => ({
+            url: `https://www.youtube.com/watch?v=rs10${i}`,
+            title: `Lecture ${i + 1}: ${t}`,
+            duration: 900 + i * 137,
+          })),
+        };
+      }
+      if (/youtube\.com|youtu\.be/.test(url)) {
+        return {
+          url,
+          kind: 'site',
+          site: 'YouTube',
+          title: 'Introduction to Google Earth Engine: Sentinel-2 cloud masking',
+          uploader: 'Geospatial Campus',
+          duration: 1394,
+          qualities: [2160, 1440, 1080, 720, 480, 360].map((height) => ({ height, bandwidth: height * 4200 })),
+          category: 'Video',
+        };
+      }
       if (/\.m3u8$/.test(name)) {
         return {
           url,
@@ -229,6 +254,9 @@ export function createMockApi() {
       return { url, kind: 'file', fileName: name, totalBytes: 734_003_200, resumable: true, category: categoryOf(name) };
     },
     platform: async () => 'win32',
+    toolStatus: async () => ({ ytdlp: { path: 'yt-dlp.exe', version: '2026.10.21' }, ffmpeg: { path: 'ffmpeg.exe', version: 'ffmpeg version 7.1' }, canInstallFfmpeg: true }),
+    installTool: async () => ({}),
+    onToolProgress: () => () => {},
     setTitleBar: async () => {},
     checkFfmpeg: async () => ({ path: 'ffmpeg', version: 'ffmpeg version 7.1 (preview)' }),
     openExtensionFolder: async () => {},

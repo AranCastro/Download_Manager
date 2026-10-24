@@ -48,8 +48,9 @@ const httpTransport = {
       totalBytes = length != null && !encoded ? Number(length) : null;
     }
     const fileName = fileNameFromResponse(res.url || dl.url, res.headers);
+    const contentType = res.headers.get('content-type');
     await res.body?.cancel().catch(() => {});
-    return { totalBytes, resumable, fileName };
+    return { totalBytes, resumable, fileName, contentType };
   },
 
   async *open(dl, seg, signal) {

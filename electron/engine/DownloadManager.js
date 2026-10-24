@@ -13,6 +13,11 @@ const { RateLimiter } = require('./RateLimiter');
 const { CredentialStore, siteKey } = require('./CredentialStore');
 const { Scheduler, DEFAULT_SCHEDULE, normaliseSchedule } = require('./Scheduler');
 const { findFfmpeg } = require('./ffmpeg');
+const { SiteDownload } = require('./sites/SiteDownload');
+const { isSiteUrl, probeArgs, parseProbe, describeFailure, cookieFile } = require('./sites/ytdlp');
+const { findYtDlp, installYtDlp, installFfmpeg } = require('./tools');
+const { execFile } = require('child_process');
+const crypto = require('crypto');
 const { categorise } = require('./utils');
 
 const USER_AGENT =
@@ -29,6 +34,7 @@ const DEFAULT_SETTINGS = {
   notifyOnComplete: true,
   apiPort: 6801,
   ffmpegPath: '',
+  ytDlpPath: '',
   schedule: DEFAULT_SCHEDULE,
   // Appearance and window behaviour (used by the UI and the main process).
   theme: 'system',
@@ -49,8 +55,8 @@ const LIMITS = {
 };
 
 const PROTOCOLS = new Set(['http:', 'https:', 'ftp:', 'ftps:']);
-const KINDS = new Set(['file', 'hls', 'dash']);
-const QUALITIES = /^(best|worst|\d{3,4})$/;
+const KINDS = new Set(['file', 'hls', 'dash', 'site']);
+const QUALITIES = /^(best|worst|audio|mp3|\d{3,4})$/;
 // Headers a caller may not override: they would break range requests.
 const BLOCKED_HEADERS = new Set(['host', 'range', 'content-length', 'connection', 'transfer-encoding', 'accept-encoding']);
 
@@ -62,6 +68,7 @@ function clamp(value, [min, max]) {
 
 function detectKind(url, requested) {
   if (KINDS.has(requested)) return requested;
+  if (isSiteUrl(url.href)) return 'site';
   const pathname = url.pathname.toLowerCase();
   if (pathname.endsWith('.m3u8')) return 'hls';
   if (pathname.endsWith('.mpd')) return 'dash';
@@ -82,7 +89,7 @@ function cleanHeaders(headers) {
 // Owns every download: queue order, the concurrency limit, the shared speed
 // limiter, the scheduler, saved logins and persistence to <dataDir>.
 class DownloadManager extends EventEmitter {
-  constructor({ dataDir, settings = {}, encrypt, decrypt, now }) {
+  constructor({ dataDir, settings = {}, encrypt, decrypt, now, tools = {} }) {
     super();
     this.dataDir = dataDir;
     this.settings = this.normaliseSettings({ ...DEFAULT_SETTINGS, ...settings });
@@ -93,6 +100,9 @@ class DownloadManager extends EventEmitter {
     this.scheduleRunning = false;
     this.scheduleCompleted = 0;
     this.ffmpegLookup = null;
+    this.ytdlpLookup = null;
+    this.toolOverrides = tools;
+    this.toolsDir = path.join(dataDir, 'tools');
     this.saveTimer = null;
     this.saving = Promise.resolve();
     this.ticker = null;
@@ -111,6 +121,7 @@ class DownloadManager extends EventEmitter {
         ),
       credentialsFor: (d) => this.secrets.get(`download:${d.id}`) || this.secrets.get(siteKey(d.url)),
       ffmpeg: () => this.ffmpeg(),
+      ytdlp: () => this.ytdlp(),
     };
     this.scheduler.on('start', () => this.runSchedule());
     this.scheduler.on('stop', () => this.stopSchedule());
@@ -155,6 +166,7 @@ class DownloadManager extends EventEmitter {
   }
 
   create(data, ctx = this.ctx) {
+    if (data.kind === 'site') return new SiteDownload(data, ctx);
     return data.kind === 'hls' || data.kind === 'dash' ? new StreamDownload(data, ctx) : new Download(data, ctx);
   }
 
@@ -186,7 +198,7 @@ class DownloadManager extends EventEmitter {
     if (!PROTOCOLS.has(parsed.protocol)) throw new Error('Only http, https, ftp and ftps URLs are supported');
     const detected = detectKind(parsed, kind);
     if (detected !== 'file' && !parsed.protocol.startsWith('http')) {
-      throw new Error('HLS and DASH streams must use http or https');
+      throw new Error('Streams and video pages must use http or https');
     }
     const urlLogin = parsed.username
       ? { username: decodeURIComponent(parsed.username), password: decodeURIComponent(parsed.password) }
@@ -210,6 +222,7 @@ class DownloadManager extends EventEmitter {
     const signal = AbortSignal.timeout(20000);
     const base = { url: parsed.href, kind: detected };
     try {
+      if (detected === 'site') return { ...base, ...(await this.probeSite(parsed.href, cleanHeaders(headers))) };
       if (detected === 'file') {
         const info = await draft.transport.probe(draft, signal);
         return {
@@ -218,6 +231,8 @@ class DownloadManager extends EventEmitter {
           totalBytes: info.totalBytes,
           resumable: info.resumable,
           category: categorise(info.fileName),
+          // A link to a web page rather than a file: yt-dlp may find a video on it.
+          isWebPage: /^text\/html/i.test(info.contentType || ''),
         };
       }
       const fetchText = async (u) => {
@@ -397,9 +412,68 @@ class DownloadManager extends EventEmitter {
     return [...this.downloads.values()].map((d) => d.snapshot());
   }
 
+  // Asks yt-dlp what a video page holds (title, qualities, or a playlist's
+  // videos) without downloading it.
+  async probeSite(url, headers = {}) {
+    const tool = await this.ytdlp();
+    if (!tool) return { error: 'yt-dlp is not installed', toolMissing: 'ytdlp' };
+    let cookiesPath = null;
+    if (headers.Cookie) {
+      cookiesPath = path.join(os.tmpdir(), `anabranch-cookies-${crypto.randomBytes(6).toString('hex')}.txt`);
+      await fsp.writeFile(cookiesPath, cookieFile(headers.Cookie, url), { mode: 0o600 });
+    }
+    try {
+      const { stdout } = await new Promise((resolve, reject) => {
+        execFile(
+          tool.command,
+          [...tool.args, ...probeArgs(url, { cookiesFile: cookiesPath })],
+          { windowsHide: true, timeout: 45000, maxBuffer: 64 * 1024 * 1024 },
+          (err, out, errOut) => (err ? reject(Object.assign(err, { stderr: errOut })) : resolve({ stdout: out })),
+        );
+      });
+      return parseProbe(JSON.parse(stdout), url);
+    } catch (err) {
+      return { error: err.killed ? 'The site did not answer in time' : describeFailure(String(err.stderr || err.message)) };
+    } finally {
+      if (cookiesPath) await fsp.rm(cookiesPath, { force: true }).catch(() => {});
+    }
+  }
+
   ffmpeg() {
-    if (!this.ffmpegLookup) this.ffmpegLookup = findFfmpeg(this.settings.ffmpegPath);
+    if ('ffmpeg' in this.toolOverrides) return Promise.resolve(this.toolOverrides.ffmpeg);
+    if (!this.ffmpegLookup) {
+      // An FFmpeg installed by the app itself is used when no path is set.
+      const own = path.join(this.toolsDir, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+      const preferred = this.settings.ffmpegPath || (require('fs').existsSync(own) ? own : '');
+      this.ffmpegLookup = findFfmpeg(preferred);
+    }
     return this.ffmpegLookup;
+  }
+
+  ytdlp() {
+    if (!this.ytdlpLookup) {
+      this.ytdlpLookup = findYtDlp({ preferred: this.settings.ytDlpPath, toolsDir: this.toolsDir, override: this.toolOverrides.ytdlp });
+    }
+    return this.ytdlpLookup;
+  }
+
+  async toolStatus() {
+    const [ytdlp, ffmpeg] = await Promise.all([this.ytdlp(), this.ffmpeg()]);
+    return {
+      ytdlp: ytdlp ? { path: ytdlp.command, version: ytdlp.version } : null,
+      ffmpeg: ffmpeg ? { path: ffmpeg.path, version: ffmpeg.version } : null,
+      canInstallFfmpeg: process.platform === 'win32',
+    };
+  }
+
+  // Downloads yt-dlp (any platform) or FFmpeg (Windows) into <dataDir>/tools.
+  async installTool(name, { onProgress } = {}) {
+    if (name === 'ytdlp') await installYtDlp(this.toolsDir, { onProgress });
+    else if (name === 'ffmpeg') await installFfmpeg(this.toolsDir, { onProgress });
+    else throw new Error(`Unknown tool ${name}`);
+    this.ytdlpLookup = null;
+    this.ffmpegLookup = null;
+    return this.toolStatus();
   }
 
   normaliseSettings(input) {
@@ -410,6 +484,7 @@ class DownloadManager extends EventEmitter {
     s.clipboardMonitor = Boolean(s.clipboardMonitor);
     s.notifyOnComplete = Boolean(s.notifyOnComplete);
     s.ffmpegPath = String(s.ffmpegPath || '').trim();
+    s.ytDlpPath = String(s.ytDlpPath || '').trim();
     s.schedule = normaliseSchedule(s.schedule);
     s.theme = THEMES.includes(s.theme) ? s.theme : 'system';
     s.accent = ACCENTS.includes(s.accent) ? s.accent : 'blue';
@@ -424,6 +499,7 @@ class DownloadManager extends EventEmitter {
     const previousFfmpeg = this.settings.ffmpegPath;
     this.settings = this.normaliseSettings({ ...this.settings, ...known });
     if (this.settings.ffmpegPath !== previousFfmpeg) this.ffmpegLookup = null;
+    this.ytdlpLookup = null;
     this.limiter.setRate(this.settings.speedLimitKBps * 1024);
     await writeJson(this.settingsFile, this.settings);
     this.emit('settings', this.settings);

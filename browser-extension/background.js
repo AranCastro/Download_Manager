@@ -5,6 +5,8 @@
 // - Adds "Download with Anabranch" and "Download all links" menus.
 // - Detects HLS/DASH streams and video files a page loads and lists them in
 //   the toolbar panel.
+// - Puts a Download button on YouTube's player (youtube.js) and sends the
+//   video page to the app, which downloads it with yt-dlp.
 //
 // The app is reached at http://127.0.0.1:<port>; the token comes from a
 // one-time pairing the user approves in the app.
@@ -305,7 +307,20 @@ async function refreshBadge(tabId, count) {
   }
 }
 
+// YouTube's player streams scrambled fragments that only yt-dlp can turn
+// into a video; the page itself is sent instead (player button or panel).
+const SITE_HOSTS = /(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com|googlevideo\.com)$/;
+const isYouTubePage = (url) => {
+  try {
+    const u = new URL(url);
+    return /(^|\.)youtube\.com$/.test(u.hostname) && (u.pathname === '/watch' || u.pathname.startsWith('/shorts/'));
+  } catch {
+    return false;
+  }
+};
+
 function classify(url, contentType) {
+  if (SITE_HOSTS.test(new URL(url).hostname)) return null;
   const path = new URL(url).pathname.toLowerCase();
   const type = (contentType || '').toLowerCase().split(';')[0].trim();
   if (type.includes('mpegurl') || path.endsWith('.m3u8')) return 'hls';
@@ -384,7 +399,7 @@ ext.tabs.onRemoved.addListener((tabId) => clearMedia(tabId));
 
 // ---- Messages from the toolbar panel --------------------------------------
 
-async function handleMessage(msg) {
+async function handleMessage(msg, sender) {
   switch (msg.type) {
     case 'status': {
       const s = await getSettings();
@@ -410,6 +425,14 @@ async function handleMessage(msg) {
       });
       return sendItems([item]);
     }
+    case 'download-page': {
+      // A video page (YouTube): the app hands it to yt-dlp, with the
+      // browser's YouTube sign-in for members-only or age-restricted videos.
+      const url = msg.url || sender?.tab?.url;
+      if (!isYouTubePage(url)) throw new Error('Not a video page');
+      const storeId = msg.storeId ?? sender?.tab?.cookieStoreId;
+      return sendItems([await buildItem({ url, kind: 'site', storeId })]);
+    }
     case 'save-settings': {
       const patch = Object.fromEntries(Object.entries(msg.settings || {}).filter(([k]) => SETTING_KEYS.includes(k)));
       await ext.storage.local.set(patch);
@@ -420,7 +443,7 @@ async function handleMessage(msg) {
   }
 }
 
-ext.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  handleMessage(msg).then(sendResponse, (err) => sendResponse({ error: err.message }));
+ext.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  handleMessage(msg, sender).then(sendResponse, (err) => sendResponse({ error: err.message }));
   return true;
 });

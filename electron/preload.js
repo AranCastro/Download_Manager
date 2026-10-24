@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('dm', {
   revokePairing: invoke('dm:revoke-pairing'),
   checkFfmpeg: invoke('dm:check-ffmpeg'),
   probe: invoke('dm:probe'),
+  toolStatus: invoke('dm:tools'),
+  installTool: invoke('dm:install-tool'),
   platform: invoke('dm:platform'),
   setTitleBar: invoke('dm:titlebar'),
   openFile: invoke('dm:open-file'),
@@ -49,4 +51,5 @@ contextBridge.exposeInMainWorld('dm', {
   onPairRequest: subscribe('dm:pair-request'),
   onPairClosed: subscribe('dm:pair-closed'),
   onPowerCountdown: subscribe('dm:power-countdown'),
+  onToolProgress: subscribe('dm:tool-progress'),
 });

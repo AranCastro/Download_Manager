@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { Icon } from '../icons.jsx';
 import { Modal } from './Modal.jsx';
+import { formatBytes } from '../format.js';
 import { ACCENTS } from '../theme.js';
 
 // Applied at once (no Save needed), so the user sees the result while choosing.
@@ -79,46 +80,58 @@ const TABS = [
 
 const cleanError = (err) => err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
 
-function FfmpegField({ value, onChange }) {
-  const [result, setResult] = useState(null);
-  const check = async (bin = value) => {
-    setResult({ checking: true });
-    try {
-      setResult((await api.checkFfmpeg(bin)) || { missing: true });
-    } catch (err) {
-      setResult({ missing: true, error: cleanError(err) });
-    }
+// One external tool: where it is, its version, and a one-click install.
+function ToolField({ tool, label, value, onChange, missingText, canInstall }) {
+  const [status, setStatus] = useState(null);
+  const [install, setInstall] = useState(null);
+  const refresh = async () => {
+    const all = await api.toolStatus();
+    setStatus({ ...(all[tool] || { missing: true }), canInstall: canInstall(all) });
   };
   useEffect(() => {
-    check();
-    // Only on open; later checks are explicit.
+    refresh();
+    return api.onToolProgress?.((p) => p.name === tool && setInstall({ busy: true, ...p }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const run = async () => {
+    setInstall({ busy: true });
+    try {
+      await api.installTool(tool);
+      setInstall(null);
+      await refresh();
+    } catch (err) {
+      setInstall({ error: cleanError(err) });
+    }
+  };
+  const progress = install?.done ? ` ${formatBytes(install.done)}${install.total ? ` of ${formatBytes(install.total)}` : ''}` : '';
   return (
     <div className="field">
-      <span>FFmpeg (merges audio and video of HLS/DASH streams)</span>
+      <span>{label}</span>
       <div className="field-row">
-        <input type="text" placeholder="Found on PATH" value={value} onChange={(e) => onChange(e.target.value)} />
+        <input type="text" placeholder="Automatic" value={value} onChange={(e) => onChange(e.target.value)} />
         <button
           type="button"
           className="btn"
           onClick={async () => {
             const file = await api.chooseFile(value);
-            if (file) {
-              onChange(file);
-              check(file);
-            }
+            if (file) onChange(file);
           }}
         >
           Browse…
         </button>
-        <button type="button" className="btn" onClick={() => check()}>Check</button>
+        {status?.canInstall && (
+          <button type="button" className="btn" disabled={install?.busy} onClick={run}>
+            {install?.busy ? <span className="spinner spinner-small" /> : <Icon name="download" size={14} />}
+            {status.missing ? 'Install' : 'Update'}
+          </button>
+        )}
       </div>
-      <small className={result?.missing ? 'warn-text' : ''}>
-        {result?.checking && 'Checking…'}
-        {result?.version && `Found: ${result.version}`}
-        {result?.missing &&
-          'Not found. Streams are still saved, but separate audio and video stay as two files. Install it with “winget install Gyan.FFmpeg” or choose ffmpeg.exe.'}
+      <small className={status?.missing || install?.error ? 'warn-text' : ''}>
+        {!status && 'Checking…'}
+        {install?.busy && `Downloading${progress}…`}
+        {install?.error}
+        {!install && status?.version && `Found: ${status.version}`}
+        {!install && status?.missing && missingText}
       </small>
     </div>
   );
@@ -287,7 +300,22 @@ export function SettingsDialog({ settings, onClose, initialTab = 'appearance' })
             <input type="checkbox" checked={draft.notifyOnComplete} onChange={set('notifyOnComplete')} />
             Show a notification when a download completes
           </label>
-          <FfmpegField value={draft.ffmpegPath} onChange={(ffmpegPath) => setDraft((d) => ({ ...d, ffmpegPath }))} />
+          <ToolField
+            tool="ytdlp"
+            label="yt-dlp (YouTube and other video sites)"
+            value={draft.ytDlpPath}
+            onChange={(ytDlpPath) => setDraft((d) => ({ ...d, ytDlpPath }))}
+            canInstall={() => true}
+            missingText="Not installed. Click Install to download it (about 35 MB, from the official yt-dlp releases on GitHub)."
+          />
+          <ToolField
+            tool="ffmpeg"
+            label="FFmpeg (merges audio and video; needed for HD YouTube and MP3)"
+            value={draft.ffmpegPath}
+            onChange={(ffmpegPath) => setDraft((d) => ({ ...d, ffmpegPath }))}
+            canInstall={(all) => all.canInstallFfmpeg}
+            missingText="Not found. Without it, YouTube videos are limited to 360p and some streams stay as separate audio and video files."
+          />
         </div>
       )}
 

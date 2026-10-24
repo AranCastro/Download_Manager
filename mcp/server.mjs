@@ -106,7 +106,7 @@ const tool = (handler) => async (args) => {
   }
 };
 
-const server = new McpServer({ name: 'anabranch', version: '1.1.0' });
+const server = new McpServer({ name: 'anabranch', version: '1.2.0' });
 
 const STATUSES = ['queued', 'scheduled', 'connecting', 'downloading', 'merging', 'paused', 'completed', 'error', 'auth-required'];
 
@@ -115,9 +115,10 @@ server.registerTool(
   {
     title: 'Add download',
     description:
-      'Queue a download in Anabranch: an http(s) or ftp(s) file, or an HLS (.m3u8) / ' +
-      'DASH (.mpd) video stream. Files are split across several connections when the server ' +
-      'allows it; streams are downloaded segment by segment and merged into MP4. ' +
+      'Queue a download in Anabranch: an http(s) or ftp(s) file, an HLS (.m3u8) / DASH (.mpd) ' +
+      'stream, or a video page such as a YouTube link (kind "site", handled by yt-dlp; quality ' +
+      '"audio" or "mp3" saves only the sound). Files are split across several connections when ' +
+      'the server allows it; streams and videos are merged into MP4. ' +
       'Status "auth-required" means the server needs a login (see set_credentials).',
     inputSchema: {
       url: z.string().url().describe('http, https, ftp or ftps URL of a file, or an .m3u8/.mpd stream'),
@@ -126,12 +127,12 @@ server.registerTool(
       connections: z.number().int().min(1).max(32).optional().describe('Parallel connections (1-32)'),
       start: z.boolean().optional().describe('Start immediately (default true) or add paused'),
       schedule: z.boolean().optional().describe('Add to the scheduled queue instead of starting now'),
-      kind: z.enum(['file', 'hls', 'dash']).optional().describe('Override detection by URL extension'),
+      kind: z.enum(['file', 'hls', 'dash', 'site']).optional().describe('Override detection (site = video page via yt-dlp)'),
       quality: z
         .string()
-        .regex(/^(best|worst|\d{3,4})$/)
+        .regex(/^(best|worst|audio|mp3|\d{3,4})$/)
         .optional()
-        .describe('Streams: best (default), worst, or a maximum height such as 720'),
+        .describe('Streams and videos: best (default), worst, a maximum height such as 720, audio or mp3'),
       username: z.string().optional().describe('Login for servers that require one'),
       password: z.string().optional(),
       headers: z.record(z.string(), z.string()).optional().describe('Extra request headers, e.g. Referer or Cookie'),
@@ -145,11 +146,12 @@ server.registerTool(
   {
     title: 'Inspect URL',
     description:
-      'Check a link before downloading it: file name, size, whether it can resume, and for ' +
-      'HLS/DASH streams the available qualities and the duration. Nothing is downloaded.',
+      'Check a link before downloading it: file name, size, whether it can resume; for HLS/DASH ' +
+      'streams and video pages (YouTube) the title, qualities and duration; for playlists the ' +
+      'videos they contain. Nothing is downloaded.',
     inputSchema: {
       url: z.string().url(),
-      kind: z.enum(['file', 'hls', 'dash']).optional(),
+      kind: z.enum(['file', 'hls', 'dash', 'site']).optional(),
       username: z.string().optional(),
       password: z.string().optional(),
     },
@@ -331,6 +333,7 @@ server.registerTool(
       connections: z.number().int().min(1).max(32).optional().describe('Default connections per download'),
       speedLimitKBps: z.number().int().min(0).optional().describe('Total speed limit in KB/s; 0 = unlimited'),
       ffmpegPath: z.string().optional().describe('Path to ffmpeg(.exe) used to merge stream tracks; empty = PATH'),
+      ytDlpPath: z.string().optional().describe('Path to yt-dlp(.exe) used for YouTube; empty = the copy installed by the app, then PATH'),
     },
   },
   tool((patch) => api('PATCH', '/api/settings', patch)),

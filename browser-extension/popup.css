@@ -141,6 +141,22 @@ button:disabled {
 .kind-dash { background: #7c3aed; }
 .kind-file { background: var(--accent); }
 
+.page-video {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid #e11d48;
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.page-video button {
+  flex: none;
+}
+
 .info {
   flex: 1;
   min-width: 0;
