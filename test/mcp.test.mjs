@@ -15,7 +15,7 @@ const { createApiServer, listen } = require('../electron/api-server.js');
 const { startFileServer, waitFor } = require('./helpers.js');
 
 // Runs the bundled server when it has been built, otherwise the source.
-const bundled = path.resolve('dist-mcp/download-manager-mcp.cjs');
+const bundled = path.resolve('dist-mcp/anabranch-mcp.cjs');
 const serverScript = fs.existsSync(bundled) ? bundled : path.resolve('mcp/server.mjs');
 
 const parse = (result) => JSON.parse(result.content[0].text);
@@ -116,7 +116,7 @@ test('API rejects requests without the token or from web pages', async (t) => {
 
   const url = `http://127.0.0.1:${port}/api/downloads`;
   const ping = await (await fetch(`http://127.0.0.1:${port}/api/ping`)).json();
-  assert.deepEqual(ping, { app: 'download-manager', version: '1.0.0', authorised: false });
+  assert.deepEqual(ping, { app: 'anabranch', version: '1.0.0', authorised: false });
   assert.equal((await fetch(url)).status, 401);
   assert.equal(
     (await fetch(url, { headers: { Authorization: 'Bearer secret', Origin: 'https://evil.example' } })).status,

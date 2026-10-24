@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Download Manager — design tokens
+   Anabranch — design tokens
    Light and dark are separate token sets (not an automatic inversion).
    --accent is set at runtime from the chosen accent (see theme.js).
    ========================================================================== */

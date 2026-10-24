@@ -11,7 +11,7 @@ export function TitleBar({ platform, query, onQuery, onPalette, onShortcuts, the
     <header className={`titlebar platform-${platform}`}>
       <div className="titlebar-brand">
         <img src={appIcon} alt="" width="20" height="20" />
-        <span>Download Manager</span>
+        <span>Anabranch</span>
       </div>
       <label className="titlebar-search no-drag">
         <Icon name="search" size={15} />

@@ -4,7 +4,7 @@ import { Icon } from '../icons.jsx';
 import { Modal } from './Modal.jsx';
 
 const VERB = {
-  quit: 'Download Manager will close',
+  quit: 'Anabranch will close',
   sleep: 'The computer will go to sleep',
   shutdown: 'The computer will shut down',
 };

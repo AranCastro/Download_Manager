@@ -23,11 +23,11 @@ export function PairDialog({ request, onDone }) {
         <Icon name="puzzle" size={32} strokeWidth={1.5} />
         <div>
           <p>
-            <strong>{request.browser}</strong> asks to send downloads to Download Manager.
+            <strong>{request.browser}</strong> asks to send downloads to Anabranch.
           </p>
           {request.origin && <p className="muted mono small">{request.origin}</p>}
           <p className="muted">
-            Allow this only if you just clicked <em>Connect</em> in the Download Manager browser extension. You can
+            Allow this only if you just clicked <em>Connect</em> in the Anabranch browser extension. You can
             disconnect it later in Options → Browser.
           </p>
         </div>

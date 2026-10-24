@@ -1,6 +1,8 @@
-# Download Manager
+# Anabranch
 
-A Windows desktop download manager modelled on Internet Download Manager (IDM). It is built with Electron and React. It has a browser extension for Chrome, Edge and Firefox, and a Model Context Protocol (MCP) server through which Claude, or any other MCP client, can queue and control downloads.
+**Anabranch** is a Windows desktop download manager in the style of Internet Download Manager (IDM). It is built with Electron and React. It has a browser extension for Chrome, Edge and Firefox, and a Model Context Protocol (MCP) server through which Claude, or any other MCP client, can queue and control downloads.
+
+*About the name:* in hydrology, an anabranch is a channel that leaves a river and rejoins it downstream. Anabranch works the same way: each file is split into parallel connections, and they are rejoined into one file.
 
 ![Main window, light theme](docs/screenshot.png)
 
@@ -32,7 +34,7 @@ A Windows desktop download manager modelled on Internet Download Manager (IDM). 
 | Dynamic segmentation | A connection that finishes early takes over half of the largest remaining range, so that all connections stay busy until the end. |
 | FTP and FTPS | `ftp://` and `ftps://` (implicit TLS) URLs support multiple connections and resume. Anonymous login is used unless credentials are supplied. When a server limits connections, the downloader continues with the connections it was granted. |
 | Video streams (HLS and DASH) | `.m3u8` and `.mpd` URLs are resolved to their segments, which download in parallel. AES-128-encrypted HLS is decrypted. The quality can be set to best, worst, or a maximum height. When FFmpeg is present, the segments are merged into one MP4 file. |
-| Browser integration | The extension hands downloads of chosen file types to the app, together with the browser's cookies and referrer, so that downloads behind a sign-in still work. It also adds right-click menus (*Download with Download Manager* and *Download all links*) and lists the video streams a page loads. |
+| Browser integration | The extension hands downloads of chosen file types to the app, together with the browser's cookies and referrer, so that downloads behind a sign-in still work. It also adds right-click menus (*Download with Anabranch* and *Download all links*) and lists the video streams a page loads. |
 | Scheduler | Scheduled downloads start at a set time on chosen weekdays, with an optional stop time. When the queue finishes, the app can do nothing, close, put the computer to sleep or shut it down, after a 60-second countdown that can be cancelled. |
 | Login prompts | When a server answers HTTP 401 (Basic or Digest) or FTP 530, the download pauses and the app asks for credentials. A login can be remembered for the whole site. Logins and cookies are encrypted with Windows DPAPI (Data Protection API) and are never written to the download list. |
 | Pause and resume | Downloads continue from the saved offsets, including after a restart. A stream resumes from the last segment it completed. |
@@ -45,7 +47,7 @@ A Windows desktop download manager modelled on Internet Download Manager (IDM). 
 
 GitHub Actions builds the app and runs the tests on Windows on every push. Open the **Actions** tab, select the latest **Build Windows exe** run, and download these artifacts:
 
-- **download-manager-windows** contains `Download Manager-Setup-1.1.0.exe` (an installer) and `Download Manager-Portable-1.1.0.exe` (one file, no installation).
+- **anabranch-windows** contains `Anabranch-Setup-1.1.0.exe` (an installer) and `Anabranch-Portable-1.1.0.exe` (one file, no installation).
 - **browser-extension** contains the extension as zip files for Chromium-based browsers and for Firefox.
 
 When a tag such as `v1.1.0` is pushed, the workflow also attaches these files to a GitHub Release. The executables are not code-signed, so Windows SmartScreen shows a warning on first launch; select **More info → Run anyway**.
@@ -56,7 +58,7 @@ The installed app contains the extension in `resources\browser-extension\`. **Op
 
 1. **Chrome, Edge, Brave or Opera:** open `chrome://extensions` (or `edge://extensions`), turn on *Developer mode*, choose *Load unpacked*, and select the `chromium` folder.
 2. **Firefox:** open `about:debugging#/runtime/this-firefox`, choose *Load Temporary Add-on*, and select `manifest.json` in the `firefox` folder. Release versions of Firefox keep only signed add-ons after a restart; a permanent installation needs the zip to be signed through addons.mozilla.org.
-3. Click the Download Manager button in the browser toolbar, then **Connect**. Approve the request in the app window.
+3. Click the Anabranch button in the browser toolbar, then **Connect**. Approve the request in the app window.
 
 Pairing gives each browser its own token; the app stores only a hash of it. **Options → Browser** lists the connected browsers, and each one can be disconnected there. The toolbar panel controls which file types are captured, the minimum file size, the sites to skip, and whether each download is confirmed in the app first. If the app is closed when a download starts, the extension returns the download to the browser.
 
@@ -76,16 +78,16 @@ Live streams, and streams protected by DRM (Widevine, PlayReady, FairPlay, HLS S
 
 ## Connecting Claude via MCP
 
-1. Start Download Manager.
+1. Start Anabranch.
 2. Open **Options → MCP / AI** and copy the configuration shown there. It contains the correct paths for your installation.
 3. Paste the configuration into `%APPDATA%\Claude\claude_desktop_config.json`, then restart Claude Desktop.
 
 ```json
 {
   "mcpServers": {
-    "download-manager": {
-      "command": "C:\\Users\\<you>\\AppData\\Local\\Programs\\Download Manager\\Download Manager.exe",
-      "args": ["C:\\Users\\<you>\\AppData\\Local\\Programs\\Download Manager\\resources\\mcp\\download-manager-mcp.cjs"],
+    "anabranch": {
+      "command": "C:\\Users\\<you>\\AppData\\Local\\Programs\\Anabranch\\Anabranch.exe",
+      "args": ["C:\\Users\\<you>\\AppData\\Local\\Programs\\Anabranch\\resources\\mcp\\anabranch-mcp.cjs"],
       "env": { "ELECTRON_RUN_AS_NODE": "1" }
     }
   }
@@ -110,11 +112,11 @@ Example prompt: *"Download the DEM tiles listed at these three FTP links tonight
 ### Security of the local API
 
 ```
-Claude Desktop ──stdio──▶ download-manager-mcp.cjs ──HTTP + token──▶ Download Manager (127.0.0.1:6801)
+Claude Desktop ──stdio──▶ anabranch-mcp.cjs ──HTTP + token──▶ Anabranch (127.0.0.1:6801)
 Browser extension ─────────────────────────────────HTTP + token──▶
 ```
 
-The REST API listens on `127.0.0.1` only. A request with a web-page `Origin` header is rejected. Every route except `/api/ping` and `/api/pair` requires a bearer token: either the app token in `%APPDATA%\Download Manager\api.json`, which the MCP server reads, or a token issued to a browser extension after the user approved it.
+The REST API listens on `127.0.0.1` only. A request with a web-page `Origin` header is rejected. Every route except `/api/ping` and `/api/pair` requires a bearer token: either the app token in `%APPDATA%\Anabranch\api.json`, which the MCP server reads, or a token issued to a browser extension after the user approved it.
 
 Endpoints:
 
@@ -168,7 +170,7 @@ src/                         React interface
 test/                        node:test suites
 ```
 
-Settings, the download list, encrypted secrets and browser pairings are stored in `%APPDATA%\Download Manager\`. Partial files use the extension `.dmpart`; partial streams are kept in a `.dmparts` folder beside the target.
+Settings, the download list, encrypted secrets and browser pairings are stored in `%APPDATA%\Anabranch\`. Partial files use the extension `.dmpart`; partial streams are kept in a `.dmparts` folder beside the target.
 
 ## Known limitations
 

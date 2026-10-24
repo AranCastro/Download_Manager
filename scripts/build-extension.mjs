@@ -11,11 +11,11 @@ const files = ['background.js', 'popup.html', 'popup.js', 'popup.css', 'icons'];
 const icons = Object.fromEntries([16, 32, 48, 128].map((s) => [s, `icons/icon-${s}.png`]));
 
 const common = {
-  name: 'Download Manager Integration',
-  short_name: 'Download Manager',
+  name: 'Anabranch Browser Connector',
+  short_name: 'Anabranch',
   version,
   description:
-    'Sends downloads, links and detected video streams (HLS/DASH) to the Download Manager desktop app.',
+    'Sends downloads, links and detected video streams (HLS/DASH) to the Anabranch desktop app.',
   icons,
 };
 
@@ -27,15 +27,15 @@ const manifests = {
     permissions: ['downloads', 'contextMenus', 'cookies', 'storage', 'scripting', 'webRequest', 'webNavigation'],
     host_permissions: ['<all_urls>'],
     background: { service_worker: 'background.js' },
-    action: { default_popup: 'popup.html', default_title: 'Download Manager', default_icon: icons },
+    action: { default_popup: 'popup.html', default_title: 'Anabranch', default_icon: icons },
   },
   firefox: {
     manifest_version: 2,
     ...common,
     permissions: ['downloads', 'contextMenus', 'cookies', 'storage', 'webRequest', 'webNavigation', 'tabs', '<all_urls>'],
     background: { scripts: ['background.js'] },
-    browser_action: { default_popup: 'popup.html', default_title: 'Download Manager', default_icon: icons },
-    browser_specific_settings: { gecko: { id: 'download-manager@draran.online', strict_min_version: '115.0' } },
+    browser_action: { default_popup: 'popup.html', default_title: 'Anabranch', default_icon: icons },
+    browser_specific_settings: { gecko: { id: 'anabranch@draran.online', strict_min_version: '115.0' } },
   },
 };
 
@@ -47,7 +47,7 @@ for (const [target, manifest] of Object.entries(manifests)) {
   fs.writeFileSync(path.join(dir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 
   // The zips are what users load or submit to the browser stores.
-  const zip = path.join(out, `download-manager-extension-${target}-${version}.zip`);
+  const zip = path.join(out, `anabranch-extension-${target}-${version}.zip`);
   zipDirectory(dir, zip);
   console.log(`built ${dir} and ${path.relative('.', zip)}`);
 }

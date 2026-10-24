@@ -232,7 +232,7 @@ export function createMockApi() {
     setTitleBar: async () => {},
     checkFfmpeg: async () => ({ path: 'ffmpeg', version: 'ffmpeg version 7.1 (preview)' }),
     openExtensionFolder: async () => {},
-    extensionFolder: async (browser) => `C:\\Program Files\\Download Manager\\resources\\browser-extension\\${browser}`,
+    extensionFolder: async (browser) => `C:\\Program Files\\Anabranch\\resources\\browser-extension\\${browser}`,
     chooseFile: async () => 'C:\\ffmpeg\\bin\\ffmpeg.exe',
     removeCompleted: async () => {
       for (let i = downloads.length - 1; i >= 0; i--) if (downloads[i].status === 'completed') downloads.splice(i, 1);
@@ -253,8 +253,8 @@ export function createMockApi() {
       port: 6801,
       token: '3f9c1e0a7b5d42c88e61f0d2a9b7c4e1d5f6a8b9c0d1e2f3',
       url: 'http://127.0.0.1:6801',
-      mcpScript: 'C:\\Program Files\\Download Manager\\resources\\mcp\\download-manager-mcp.cjs',
-      executable: 'C:\\Program Files\\Download Manager\\Download Manager.exe',
+      mcpScript: 'C:\\Program Files\\Anabranch\\resources\\mcp\\anabranch-mcp.cjs',
+      executable: 'C:\\Program Files\\Anabranch\\Anabranch.exe',
     }),
     onUpdate: (fn) => (listeners.update.add(fn), () => listeners.update.delete(fn)),
     onSettings: (fn) => (listeners.settings.add(fn), () => listeners.settings.delete(fn)),

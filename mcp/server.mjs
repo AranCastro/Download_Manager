@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// MCP server (stdio) for Download Manager.
+// MCP server (stdio) for Anabranch.
 //
 // It forwards tool calls to the running desktop app through its local REST
 // API. The API address and token are read from DM_API_URL / DM_API_TOKEN, or
@@ -12,7 +12,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
-const APP_FOLDER = 'Download Manager';
+const APP_FOLDER = 'Anabranch';
 
 function apiFileCandidates() {
   if (process.env.DM_API_FILE) return [process.env.DM_API_FILE];
@@ -38,7 +38,7 @@ function apiConfig() {
     }
   }
   throw new Error(
-    'Download Manager is not running (no api.json found). Start the desktop app and try again.',
+    'Anabranch is not running (no api.json found). Start the desktop app and try again.',
   );
 }
 
@@ -52,10 +52,10 @@ async function api(method, route, body) {
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new Error(`Cannot reach Download Manager at ${url}. Is the desktop app running?`);
+    throw new Error(`Cannot reach Anabranch at ${url}. Is the desktop app running?`);
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Download Manager API returned HTTP ${res.status}`);
+  if (!res.ok) throw new Error(data.error || `Anabranch API returned HTTP ${res.status}`);
   return data;
 }
 
@@ -106,7 +106,7 @@ const tool = (handler) => async (args) => {
   }
 };
 
-const server = new McpServer({ name: 'download-manager', version: '1.1.0' });
+const server = new McpServer({ name: 'anabranch', version: '1.1.0' });
 
 const STATUSES = ['queued', 'scheduled', 'connecting', 'downloading', 'merging', 'paused', 'completed', 'error', 'auth-required'];
 
@@ -115,7 +115,7 @@ server.registerTool(
   {
     title: 'Add download',
     description:
-      'Queue a download in Download Manager: an http(s) or ftp(s) file, or an HLS (.m3u8) / ' +
+      'Queue a download in Anabranch: an http(s) or ftp(s) file, or an HLS (.m3u8) / ' +
       'DASH (.mpd) video stream. Files are split across several connections when the server ' +
       'allows it; streams are downloaded segment by segment and merged into MP4. ' +
       'Status "auth-required" means the server needs a login (see set_credentials).',
@@ -315,7 +315,7 @@ server.registerTool(
 
 server.registerTool(
   'get_settings',
-  { title: 'Get settings', description: 'Read Download Manager settings.', inputSchema: {} },
+  { title: 'Get settings', description: 'Read Anabranch settings.', inputSchema: {} },
   tool(() => api('GET', '/api/settings')),
 );
 
@@ -339,6 +339,6 @@ server.registerTool(
 server
   .connect(new StdioServerTransport())
   .catch((err) => {
-    console.error('Download Manager MCP server failed to start:', err);
+    console.error('Anabranch MCP server failed to start:', err);
     process.exit(1);
   });

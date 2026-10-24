@@ -91,13 +91,13 @@ function createApiServer(manager, { token, isPairedToken = () => false, onPair, 
 
     try {
       if (req.method === 'GET' && url.pathname === '/api/ping') {
-        return send(200, { app: 'download-manager', version, authorised: tokenValid(req) });
+        return send(200, { app: 'anabranch', version, authorised: tokenValid(req) });
       }
       if (req.method === 'POST' && url.pathname === '/api/pair') {
         if (!onPair) return send(404, { error: 'Pairing is not available' });
         const body = await readBody(req);
         const issued = await onPair({ origin: origin || null, browser: String(body.browser || 'Browser').slice(0, 60) });
-        return issued ? send(200, { token: issued }) : send(403, { error: 'The connection was declined in Download Manager' });
+        return issued ? send(200, { token: issued }) : send(403, { error: 'The connection was declined in Anabranch' });
       }
 
       if (!tokenValid(req)) return send(401, { error: 'Missing or invalid API token' });

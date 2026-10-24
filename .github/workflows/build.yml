@@ -34,7 +34,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: download-manager-windows
+          name: anabranch-windows
           path: release/*.exe
           if-no-files-found: error
 

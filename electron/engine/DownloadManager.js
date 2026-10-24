@@ -17,7 +17,7 @@ const { categorise } = require('./utils');
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-  'Chrome/140.0 Safari/537.36 DownloadManager/1.1';
+  'Chrome/140.0 Safari/537.36 Anabranch/1.1';
 
 const DEFAULT_SETTINGS = {
   downloadDir: path.join(os.homedir(), 'Downloads'),

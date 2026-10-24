@@ -39,7 +39,7 @@ const ICON = path.join(__dirname, '..', 'build', 'icon.png');
 // Height of the custom title bar; the native window buttons are drawn over it.
 const TITLEBAR_HEIGHT = 44;
 
-// URLs passed on the command line, e.g. `"Download Manager.exe" https://...`.
+// URLs passed on the command line, e.g. `"Anabranch.exe" https://...`.
 const urlArgs = (argv) => argv.filter((a) => /^(https?|ftps?):\/\//i.test(a));
 const userFile = (name) => path.join(app.getPath('userData'), name);
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
@@ -226,7 +226,7 @@ function createWindow() {
     height: 760,
     minWidth: 860,
     minHeight: 520,
-    title: 'Download Manager',
+    title: 'Anabranch',
     backgroundColor: titleBarColours(dark).color,
     icon: ICON,
     titleBarStyle: 'hidden',
@@ -270,11 +270,11 @@ function createWindow() {
 function createTray() {
   const size = process.platform === 'win32' ? 16 : 22;
   tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: size, height: size }));
-  tray.setToolTip('Download Manager');
+  tray.setToolTip('Anabranch');
   tray.on('click', showWindow);
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Open Download Manager', click: showWindow },
+      { label: 'Open Anabranch', click: showWindow },
       {
         label: 'Add link from clipboard',
         click: async () => {
@@ -301,7 +301,7 @@ function updateTaskbar() {
   const speed = active.reduce((sum, d) => sum + (d.speed || 0), 0);
   if (!active.length) {
     mainWindow.setProgressBar(-1);
-    tray?.setToolTip('Download Manager');
+    tray?.setToolTip('Anabranch');
     return;
   }
   const known = active.filter((d) => d.totalBytes);
@@ -310,7 +310,7 @@ function updateTaskbar() {
   if (total) mainWindow.setProgressBar(done / total);
   else mainWindow.setProgressBar(2, { mode: 'indeterminate' });
   const mb = (speed / 1048576).toFixed(1);
-  tray?.setToolTip(`Download Manager — ${active.length} active, ${mb} MB/s`);
+  tray?.setToolTip(`Anabranch — ${active.length} active, ${mb} MB/s`);
 }
 
 function send(channel, payload) {
@@ -408,8 +408,8 @@ function registerIpc() {
     ...apiInfo,
     url: apiInfo.port ? `http://127.0.0.1:${apiInfo.port}` : null,
     mcpScript: app.isPackaged
-      ? path.join(process.resourcesPath, 'mcp', 'download-manager-mcp.cjs')
-      : path.join(__dirname, '..', 'dist-mcp', 'download-manager-mcp.cjs'),
+      ? path.join(process.resourcesPath, 'mcp', 'anabranch-mcp.cjs')
+      : path.join(__dirname, '..', 'dist-mcp', 'anabranch-mcp.cjs'),
     executable: process.execPath,
   }));
 }

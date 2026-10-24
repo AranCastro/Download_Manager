@@ -136,7 +136,7 @@ function BrowserTab() {
   return (
     <div className="tab-panel">
       <p>
-        The browser extension sends downloads, links (right-click → <em>Download with Download Manager</em>) and video
+        The browser extension sends downloads, links (right-click → <em>Download with Anabranch</em>) and video
         streams it detects on a page to this app, together with the browser’s cookies so that signed-in downloads work.
       </p>
       <ol className="steps">
@@ -158,7 +158,7 @@ function BrowserTab() {
           </div>
         </li>
         <li>
-          Click the Download Manager button in the browser toolbar, then <em>Connect</em>, and allow the request here.
+          Click the Anabranch button in the browser toolbar, then <em>Connect</em>, and allow the request here.
         </li>
       </ol>
       <h3 className="subhead">Connected browsers</h3>
@@ -216,7 +216,7 @@ export function SettingsDialog({ settings, onClose, initialTab = 'appearance' })
     ? JSON.stringify(
         {
           mcpServers: {
-            'download-manager': {
+            'anabranch': {
               command: info.executable,
               args: [info.mcpScript],
               env: { ELECTRON_RUN_AS_NODE: '1' },

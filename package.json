@@ -1,8 +1,9 @@
 {
-  "name": "download-manager",
-  "productName": "Download Manager",
+  "name": "anabranch-download-manager",
+  "productName": "Anabranch",
   "version": "1.1.0",
-  "description": "Multi-connection desktop download manager (Electron + React) with FTP, HLS/DASH, scheduler, browser extension and an MCP server.",
+  "private": true,
+  "description": "Anabranch: a multi-connection desktop download manager (Electron + React) with FTP, HLS/DASH, a scheduler, a browser extension and an MCP server.",
   "author": "Dr Aran Castro <arancastro17@gmail.com>",
   "license": "MIT",
   "main": "electron/main.js",
@@ -19,8 +20,8 @@
     "build:extension": "node scripts/build-extension.mjs"
   },
   "build": {
-    "appId": "online.draran.downloadmanager",
-    "productName": "Download Manager",
+    "appId": "online.draran.anabranch",
+    "productName": "Anabranch",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -75,6 +76,10 @@
       ]
     }
   },
+  "dependencies": {
+    "basic-ftp": "6.2.3",
+    "fast-xml-parser": "5.11.2"
+  },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
     "@vitejs/plugin-react": "6.1.2",
@@ -86,9 +91,5 @@
     "react-dom": "19.3.1",
     "vite": "8.3.5",
     "zod": "4.6.7"
-  },
-  "dependencies": {
-    "basic-ftp": "6.2.3",
-    "fast-xml-parser": "5.11.2"
   }
 }

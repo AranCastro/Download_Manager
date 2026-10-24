@@ -4,7 +4,7 @@ import { build } from 'esbuild';
 
 await build({
   entryPoints: ['mcp/server.mjs'],
-  outfile: 'dist-mcp/download-manager-mcp.cjs',
+  outfile: 'dist-mcp/anabranch-mcp.cjs',
   bundle: true,
   platform: 'node',
   target: 'node20',

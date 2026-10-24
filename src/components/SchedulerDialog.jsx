@@ -14,7 +14,7 @@ const DAYS = [
 
 const AFTER_DONE = [
   ['nothing', 'Do nothing'],
-  ['quit', 'Close Download Manager'],
+  ['quit', 'Close Anabranch'],
   ['sleep', 'Put the computer to sleep'],
   ['shutdown', 'Shut down the computer'],
 ];

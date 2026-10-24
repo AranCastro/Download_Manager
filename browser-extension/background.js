@@ -1,8 +1,8 @@
-// Download Manager browser integration (Chrome, Edge, Firefox).
+// Anabranch browser integration (Chrome, Edge, Firefox).
 //
 // - Hands file downloads over to the desktop app (with cookies and referrer,
 //   so links that need a browser session still work).
-// - Adds "Download with Download Manager" and "Download all links" menus.
+// - Adds "Download with Anabranch" and "Download all links" menus.
 // - Detects HLS/DASH streams and video files a page loads and lists them in
 //   the toolbar panel.
 //
@@ -63,7 +63,7 @@ async function findApp() {
   for (const port of ports) {
     try {
       const info = await call('/api/ping', { port, timeout: 800 });
-      if (info.app === 'download-manager') {
+      if (info.app === 'anabranch') {
         if (port !== s.port) await ext.storage.local.set({ port });
         return { port, authorised: info.authorised };
       }
@@ -91,7 +91,7 @@ function browserName() {
 // Asks the app for a token; the user approves the request in the app window.
 async function pair() {
   const app = await findApp();
-  if (!app) throw new Error('Download Manager is not running.');
+  if (!app) throw new Error('Anabranch is not running.');
   const { token } = await call('/api/pair', {
     method: 'POST',
     body: { browser: browserName() },
@@ -123,7 +123,7 @@ async function buildItem({ url, referrer, fileName, kind, storeId }) {
 
 async function sendItems(items, { prompt } = {}) {
   const s = await getSettings();
-  if (!s.token) throw new Error('Not connected to Download Manager');
+  if (!s.token) throw new Error('Not connected to Anabranch');
   try {
     if (prompt ?? s.confirm) return await call('/api/prompt', { method: 'POST', body: { items } });
     for (const item of items) await call('/api/downloads', { method: 'POST', body: item });
@@ -222,10 +222,10 @@ async function createMenus() {
   await Promise.resolve(ext.contextMenus.removeAll());
   ext.contextMenus.create({
     id: 'dm-link',
-    title: 'Download with Download Manager',
+    title: 'Download with Anabranch',
     contexts: ['link', 'image', 'video', 'audio'],
   });
-  ext.contextMenus.create({ id: 'dm-all', title: 'Download all links with Download Manager…', contexts: ['page'] });
+  ext.contextMenus.create({ id: 'dm-all', title: 'Download all links with Anabranch…', contexts: ['page'] });
 }
 ext.runtime.onInstalled.addListener(createMenus);
 ext.runtime.onStartup?.addListener(createMenus);
