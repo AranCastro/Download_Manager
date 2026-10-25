@@ -36,7 +36,21 @@ Installed copies (from the Setup exe) check for a new version 20 seconds after s
 
 ## 2. Website (GitHub Pages)
 
-The workflow `.github/workflows/pages.yml` builds the landing page (`site/`) and the browser demo of the app, and publishes them on every push to `main`. Pull requests only build them, as a check. Switch GitHub Pages on once **(you)**: in the repository, open **Settings → Pages → Build and deployment**, set **Source** to **GitHub Actions**, then rerun the **Website** workflow from the Actions tab. The site is then at <https://arancastro.github.io/Download_Manager/>.
+The workflow `.github/workflows/pages.yml` builds the landing page (`site/`) and the browser demo of the app, and publishes them on every push to `main`. Pull requests only build them, as a check. Switch GitHub Pages on once **(you)**: in the repository, open **Settings → Pages → Build and deployment**, set **Source** to **GitHub Actions**, then rerun the **Website** workflow from the Actions tab.
+
+The site's address is **https://anabranch.draran.online/**, a subdomain of draran.online. Its DNS is run by Netlify, so the record is added there **(you)**:
+
+1. In Netlify, open **Domains → draran.online → DNS settings → Add new record**, and add:
+
+   | Type | Name | Value | TTL |
+   | --- | --- | --- | --- |
+   | CNAME | `anabranch` | `arancastro.github.io` | 3600 (default) |
+
+2. In the repository, open **Settings → Pages → Custom domain**, enter `anabranch.draran.online`, and choose **Save**. GitHub checks the DNS record; this can take from a few minutes up to an hour after step 1.
+3. When the check passes and GitHub has issued the certificate, tick **Enforce HTTPS**.
+4. Recommended: verify the domain for your GitHub account, so that nobody else can publish a GitHub Pages site on it. Open your profile's **Settings → Pages → Add a domain**, enter `draran.online`, and add the TXT record GitHub shows in Netlify DNS in the same way as step 1.
+
+The workflow publishes with GitHub Actions, so no `CNAME` file is needed in the repository; GitHub keeps the custom domain in the Pages settings. Until step 2 is done, the site is at <https://arancastro.github.io/Download_Manager/>.
 
 Launch texts for Hacker News and AlternativeTo are in `docs/launch/`.
 
