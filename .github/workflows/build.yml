@@ -37,10 +37,26 @@ jobs:
       - name: Package installer and portable exe
         run: npx electron-builder --win --x64 --publish never
 
+      - name: Check the update files exist
+        shell: bash
+        run: ls release/latest.yml release/*.blockmap
+
+      # Scoop manifest (anabranch.json) and winget manifests for this version.
+      - name: Write package-manager manifests
+        run: node scripts/package-manifests.mjs
+
       - uses: actions/upload-artifact@v4
         with:
           name: anabranch-windows
           path: release/*.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-manifests
+          path: |
+            release/anabranch.json
+            release/anabranch-winget-*.zip
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
@@ -57,9 +73,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.release_tag || github.ref_name }}
+        # latest.yml and the .blockmap are what installed copies read to
+        # update themselves (electron-updater).
         run: |
+          version="v$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$version" ]; then echo "Tag $TAG does not match package.json ($version)"; exit 1; fi
+          files=(release/*.exe release/latest.yml release/*.blockmap release/anabranch.json release/anabranch-winget-*.zip dist-extension/*.zip)
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" release/*.exe dist-extension/*.zip --clobber
+            gh release upload "$TAG" "${files[@]}" --clobber
           else
-            gh release create "$TAG" release/*.exe dist-extension/*.zip --title "$TAG" --target "$GITHUB_SHA" --generate-notes
+            gh release create "$TAG" "${files[@]}" --title "$TAG" --target "$GITHUB_SHA" --generate-notes
           fi
