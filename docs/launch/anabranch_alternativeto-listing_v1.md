@@ -78,4 +78,5 @@ Upload, in this order:
 
 1. `docs/screenshot.png`: main window, light theme.
 2. `docs/screenshot-dark.png`: main window, dark theme.
-3. A screenshot of **Options → MCP / AI** in the app.
+3. `docs/launch/images/anabranch_mcp-settings-screenshot_v1.png`: **Options → MCP / AI**, with the Claude Desktop configuration.
+4. `docs/launch/images/anabranch_store-screenshot-light_v1.png`: the browser extension.

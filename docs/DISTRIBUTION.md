@@ -171,4 +171,14 @@ Send downloads, links and video streams from the browser to Anabranch, a fast mu
 >
 > First use: start Anabranch, click the extension's toolbar button, choose **Connect**, and approve the request in the app.
 
-**Screenshots:** 1280×800 images of the toolbar panel and of the app's Add dialog. `docs/screenshot.png` can be cropped to this size.
+**Images** (in `docs/launch/images/`, all at the sizes the stores ask for):
+
+| File | Size | Use |
+| --- | --- | --- |
+| `anabranch_store-screenshot-light_v1.png` | 1280×800 | Screenshot 1 (Chrome, Edge, Firefox) |
+| `anabranch_store-screenshot-dark_v1.png` | 1280×800 | Screenshot 2 |
+| `../../screenshot.png` (in `docs/`) | 1280×800 | Screenshot 3: the desktop app |
+| `anabranch_store-promo-tile_v1.png` | 440×280 | Chrome Web Store small promo tile |
+| `build/icon.png` | 512×512 | Store icon (Edge and AMO accept it; Chrome takes the 128×128 icon from the extension) |
+
+The screenshots show the store build of the extension detecting an HLS stream and an MP4 file on a test page.
