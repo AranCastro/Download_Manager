@@ -4,6 +4,8 @@
 
 *About the name:* in hydrology, an anabranch is a channel that leaves a river and rejoins it downstream. Anabranch works the same way: each file is split into parallel connections, and they are rejoined into one file.
 
+**Website and live demo:** <https://arancastro.github.io/Download_Manager/>. The demo runs the real interface in the browser with simulated downloads.
+
 ![Main window, light theme](docs/screenshot.png)
 
 <details>

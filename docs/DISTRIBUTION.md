@@ -11,6 +11,7 @@ A few steps need an account that only the maintainer can create. They are marked
 | Channel | Cost | Status |
 | --- | --- | --- |
 | Automatic updates | Free | Built in. The installed app updates itself from GitHub Releases. |
+| Website with a live demo | Free (GitHub Pages) | Built and published by CI. Switch Pages on once **(you)**. |
 | Scoop | Free | Works now (see below). |
 | winget | Free | Each release includes ready-made manifests. The first submission is one pull request **(you)**. |
 | Edge Add-ons | Free | Upload the store build of the extension **(you)**. |
@@ -33,7 +34,13 @@ The workflow publishes the release with these files:
 
 Installed copies (from the Setup exe) check for a new version 20 seconds after start and every 6 hours. They download it in the background and show **Restart now**. The portable exe cannot replace itself; it shows that a new version exists and links to the release. Users can switch updates off in **Options → General → Updates**. That setting also covers the daily `yt-dlp -U` for the copy of yt-dlp that the app installed.
 
-## 2. Scoop (works now)
+## 2. Website (GitHub Pages)
+
+The workflow `.github/workflows/pages.yml` builds the landing page (`site/`) and the browser demo of the app, and publishes them on every push to `main`. Pull requests only build them, as a check. Switch GitHub Pages on once **(you)**: in the repository, open **Settings → Pages → Build and deployment**, set **Source** to **GitHub Actions**, then rerun the **Website** workflow from the Actions tab. The site is then at <https://arancastro.github.io/Download_Manager/>.
+
+Launch texts for Hacker News and AlternativeTo are in `docs/launch/`.
+
+## 3. Scoop (works now)
 
 Users install with:
 
@@ -43,12 +50,12 @@ scoop install https://github.com/AranCastro/Download_Manager/releases/latest/dow
 
 `scoop update anabranch` then fetches the newest release, because the manifest's address always points to the latest one.
 
-## 3. winget (first submission by you)
+## 4. winget (first submission by you)
 
 The first version of a package must be submitted to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) as a pull request. In PowerShell on Windows:
 
 ```powershell
-# 1. Download and unpack the manifests from the latest release
+# 1. Download and extract the manifests from the latest release
 Invoke-WebRequest https://github.com/AranCastro/Download_Manager/releases/latest/download/anabranch-winget-1.3.0.zip -OutFile winget.zip
 Expand-Archive winget.zip -DestinationPath winget
 $folder = Get-ChildItem winget\manifests\a\AranCastro\Anabranch | Select-Object -Last 1
@@ -66,7 +73,7 @@ wingetcreate submit --token <GitHub token with public_repo scope> $folder.FullNa
 - After that, anyone can run `winget install AranCastro.Anabranch`.
 - For later versions: `wingetcreate update AranCastro.Anabranch --version <new version> --urls <Setup exe URL> --submit --token <token>`.
 
-## 4. Browser extension stores
+## 5. Browser extension stores
 
 Use the **store** builds from the release: `anabranch-extension-chromium-store-<version>.zip` and `anabranch-extension-firefox-store-<version>.zip`.
 
@@ -78,7 +85,7 @@ Use the **store** builds from the release: `anabranch-extension-chromium-store-<
 
 1. Register as a developer in [Microsoft Partner Center](https://partner.microsoft.com/dashboard/microsoftedge/overview). Registration is free.
 2. Choose **Create new extension** and upload the Chromium store zip.
-3. Fill in the listing from section 6 below. Use `https://github.com/AranCastro/Download_Manager/blob/main/docs/PRIVACY.md` as the privacy policy URL.
+3. Fill in the listing from section 7 below. Use `https://github.com/AranCastro/Download_Manager/blob/main/docs/PRIVACY.md` as the privacy policy URL.
 
 ### Firefox Add-ons (free)
 
@@ -92,12 +99,12 @@ Use the **store** builds from the release: `anabranch-extension-chromium-store-<
 1. Register at the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole). The one-time fee is US$5.
 2. Upload the same Chromium store zip as for Edge.
 3. In the **Privacy practices** tab, state:
-   - the single purpose (section 6);
+   - the single purpose (section 7);
    - one justification per permission (copy the table from [PRIVACY.md](PRIVACY.md));
    - that no remote code is used;
    - that no user data is sold or transferred to third parties.
 
-## 5. Code signing (free through SignPath Foundation)
+## 6. Code signing (free through SignPath Foundation)
 
 SignPath Foundation signs open-source projects free of charge. It requires all of the following ([terms](https://signpath.org/terms)):
 
@@ -127,7 +134,7 @@ Free code signing provided by [SignPath.io](https://signpath.io), certificate by
 Privacy policy: see [docs/PRIVACY.md](docs/PRIVACY.md). This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
 ```
 
-## 6. Store listing text
+## 7. Store listing text
 
 **Name:** Anabranch Browser Connector
 

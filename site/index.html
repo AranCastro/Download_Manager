@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Anabranch Download Manager</title>
+    <meta
+      name="description"
+      content="Free, open-source download manager for Windows that Claude and other AI assistants can operate through MCP. Multi-connection downloads, FTP, scheduling and resume for large scientific and GIS datasets."
+    />
+    <meta property="og:title" content="Anabranch: a download manager that Claude can operate" />
+    <meta
+      property="og:description"
+      content="Free, open-source Windows download manager with an MCP server, FTP, scheduling and resume for large scientific and GIS datasets."
+    />
+    <meta property="og:image" content="https://arancastro.github.io/Download_Manager/img/screenshot.png" />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="img/icon.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="./"><img src="img/icon.png" alt="" width="28" height="28" />Anabranch</a>
+      <nav>
+        <a href="#ai">AI control</a>
+        <a href="#data">Scientific data</a>
+        <a href="#install">Install</a>
+        <a href="https://github.com/AranCastro/Download_Manager">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-text">
+          <p class="eyebrow">Free and open source · Windows</p>
+          <h1>A download manager that Claude can operate</h1>
+          <p class="lead">
+            Anabranch splits each file across parallel connections, resumes after interruptions and runs queues on a
+            schedule. Its Model Context Protocol (MCP) server lets Claude, or any other MCP client, queue, schedule and
+            monitor downloads for you.
+          </p>
+          <div class="cta">
+            <a class="btn btn-primary" href="https://github.com/AranCastro/Download_Manager/releases/latest">Download for Windows</a>
+            <a class="btn" href="demo/">Try the live demo</a>
+          </div>
+          <p class="fine">
+            Installer or portable exe, about 110 MB. The installed app updates itself. The executables are not yet code-signed, so
+            Windows SmartScreen asks for confirmation on first launch (<em>More info → Run anyway</em>).
+          </p>
+        </div>
+        <figure class="hero-shot">
+          <picture>
+            <source srcset="img/screenshot-dark.png" media="(prefers-color-scheme: dark)" />
+            <img src="img/screenshot.png" width="1280" height="800" alt="Anabranch main window with Sentinel-2, SRTM and Landsat downloads in progress" />
+          </picture>
+        </figure>
+      </section>
+
+      <section id="ai" class="band">
+        <div class="split">
+          <div>
+            <p class="eyebrow">AI control through MCP</p>
+            <h2>Describe the job; the assistant runs it</h2>
+            <p>
+              Anabranch ships with an MCP server. Once it is added to Claude Desktop (one block of configuration, shown in the app
+              under <em>Options → MCP / AI</em>), the assistant can check links, queue files, set connections, manage the
+              scheduler and report progress. Requests stay on your computer: the server talks to the app over a local,
+              token-protected API.
+            </p>
+            <ul class="ticks">
+              <li>16 tools: check a link, add, pause, resume, remove, supply a login, schedule, and read or change settings</li>
+              <li>Works with any MCP client, not only Claude</li>
+              <li>No Node.js needed: the app's own runtime runs the server</li>
+            </ul>
+          </div>
+          <div class="chat" aria-label="Example conversation">
+            <p class="chat-label">Example</p>
+            <div class="msg msg-user">
+              Here are 40 Sentinel-2 tile links. Download them tonight from 01:30 with 4 connections each, then put the PC to sleep.
+            </div>
+            <div class="msg msg-tool">
+              <code>add_download</code> ×40 <span>connections: 4, schedule: true</span>
+            </div>
+            <div class="msg msg-tool">
+              <code>update_scheduler</code> <span>startTime: "01:30", afterDone: "sleep"</span>
+            </div>
+            <div class="msg msg-ai">
+              All 40 tiles (about 4.8 GB) are in the scheduled queue. They start at 01:30, and the PC goes to sleep after the
+              last one finishes. You can cancel the sleep countdown in the app.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="data">
+        <p class="eyebrow">Built for large datasets</p>
+        <h2>Scientific and GIS downloads</h2>
+        <p class="section-lead">
+          Satellite scenes, elevation models and climate archives arrive as large files on FTP servers and data portals.
+          These are the features that matter for them.
+        </p>
+        <div class="cards">
+          <article class="card">
+            <h3>FTP and FTPS</h3>
+            <p>Multiple connections and resume on <code>ftp://</code> and <code>ftps://</code> servers. When a server limits connections, the download continues with the ones it was given.</p>
+          </article>
+          <article class="card">
+            <h3>Logins</h3>
+            <p>HTTP Basic, HTTP Digest and FTP logins, stored encrypted with Windows DPAPI. Portals that use a browser sign-in work through the extension, which passes the session cookies.</p>
+          </article>
+          <article class="card">
+            <h3>Overnight queues</h3>
+            <p>Start and stop times on chosen weekdays, then nothing, quit, sleep or shut down, with a 60-second countdown you can cancel.</p>
+          </article>
+          <article class="card">
+            <h3>Resume</h3>
+            <p>Downloads continue from their saved offsets after a dropped connection or a restart of the computer.</p>
+          </article>
+          <article class="card">
+            <h3>Bulk lists</h3>
+            <p>Drop a <code>.txt</code> file with one link per line, or use <em>Download all links</em> on a portal's results page.</p>
+          </article>
+          <article class="card">
+            <h3>Your formats</h3>
+            <p>GeoTIFF, NetCDF, HDF, GRIB, GeoPackage, KMZ, LAS/LAZ and JPEG 2000 are in the browser extension's capture list by default.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="band">
+        <h2>Also included</h2>
+        <div class="cards cards-compact">
+          <article class="card"><h3>Up to 32 connections</h3><p>Each file is split into byte ranges; a connection that finishes early takes over half of the largest remaining range.</p></article>
+          <article class="card"><h3>HLS and DASH</h3><p>Video streams download in parallel and are merged into one MP4 with FFmpeg; AES-128 HLS is decrypted.</p></article>
+          <article class="card"><h3>Browser extension</h3><p>Chrome, Edge and Firefox. Hands chosen file types to the app and lists the streams a page plays.</p></article>
+          <article class="card"><h3>Video sites</h3><p>YouTube and similar pages through yt-dlp, for videos you have the right to save.</p></article>
+          <article class="card"><h3>Speed limit</h3><p>One global limit across all connections, with presets in the status bar.</p></article>
+          <article class="card"><h3>Light and dark</h3><p>Follows Windows, with six accent colours, a command palette (Ctrl+K) and keyboard shortcuts.</p></article>
+        </div>
+      </section>
+
+      <section id="install">
+        <h2>Install</h2>
+        <div class="install">
+          <div class="install-row">
+            <h3>Installer</h3>
+            <p><a href="https://github.com/AranCastro/Download_Manager/releases/latest">Anabranch-Setup.exe</a> from the latest release. Updates itself.</p>
+          </div>
+          <div class="install-row">
+            <h3>Portable</h3>
+            <p><a href="https://github.com/AranCastro/Download_Manager/releases/latest">Anabranch-Portable.exe</a>: one file, no installation.</p>
+          </div>
+          <div class="install-row">
+            <h3>Scoop</h3>
+            <pre><code>scoop install https://github.com/AranCastro/Download_Manager/releases/latest/download/anabranch.json</code></pre>
+          </div>
+          <div class="install-row">
+            <h3>Claude Desktop</h3>
+            <p>In Anabranch, open <em>Options → MCP / AI</em>, copy the configuration, and paste it into <code>%APPDATA%\Claude\claude_desktop_config.json</code>.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Anabranch is MIT-licensed and made by <a href="https://github.com/AranCastro">Dr Aran Castro</a>.
+        <a href="https://github.com/AranCastro/Download_Manager">Source code</a> ·
+        <a href="https://github.com/AranCastro/Download_Manager/blob/main/docs/PRIVACY.md">Privacy policy</a> ·
+        <a href="https://github.com/AranCastro/Download_Manager/issues">Report a problem</a>
+      </p>
+      <p class="fine">An anabranch is a river channel that leaves the main stream and rejoins it downstream, as each file's connections do.</p>
+    </footer>
+  </body>
+</html>
