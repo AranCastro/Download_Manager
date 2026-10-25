@@ -95,7 +95,17 @@ export default function App() {
       api.onPairRequest((request) => setPairRequests((list) => [...list, request])),
       api.onPairClosed((requestId) => setPairRequests((list) => list.filter((r) => r.requestId !== requestId))),
       api.onPowerCountdown(setCountdown),
-    ];
+      api.onAppUpdate?.((u) => {
+        if (u.status === 'ready') {
+          toast({
+            kind: 'success',
+            title: `Anabranch ${u.version} is ready`,
+            body: 'Restart to finish the update. Downloads resume afterwards.',
+            actions: [{ label: 'Restart now', run: () => api.installAppUpdate() }],
+          });
+        }
+      }),
+    ].filter(Boolean);
     return () => offs.forEach((off) => off());
   }, []);
 

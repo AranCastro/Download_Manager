@@ -35,6 +35,8 @@ const DEFAULT_SETTINGS = {
   apiPort: 6801,
   ffmpegPath: '',
   ytDlpPath: '',
+  // New app versions and the app's own copy of yt-dlp update automatically.
+  autoUpdate: true,
   schedule: DEFAULT_SCHEDULE,
   // Appearance and window behaviour (used by the UI and the main process).
   theme: 'system',
@@ -467,6 +469,27 @@ class DownloadManager extends EventEmitter {
     };
   }
 
+  // Updates the yt-dlp the app installed (`yt-dlp -U`), at most once a day.
+  // A copy the user chose or one on PATH is theirs to update. On Windows a
+  // running yt-dlp.exe cannot be replaced, so this waits for idle moments.
+  async updateYtDlp({ force = false } = {}) {
+    const stampFile = path.join(this.toolsDir, 'yt-dlp-checked.json');
+    const stamp = (await readJson(stampFile)) || {};
+    if (!force && Date.now() - (stamp.at || 0) < 24 * 60 * 60 * 1000) return { skipped: 'recent' };
+    if ([...this.downloads.values()].some((d) => d.kind === 'site' && d.isActive)) return { skipped: 'busy' };
+    const tool = await this.ytdlp();
+    const own = path.join(this.toolsDir, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+    if (!tool || (!this.toolOverrides.ytdlp && path.resolve(tool.command) !== own)) return { skipped: 'not-ours' };
+    await new Promise((resolve) =>
+      execFile(tool.command, [...tool.args, '-U'], { windowsHide: true, timeout: 120000 }, () => resolve()),
+    );
+    await fsp.mkdir(this.toolsDir, { recursive: true });
+    await writeJson(stampFile, { at: Date.now() });
+    this.ytdlpLookup = null;
+    const after = await this.ytdlp();
+    return { version: after?.version || null, before: tool.version };
+  }
+
   // Downloads yt-dlp (any platform) or FFmpeg (Windows) into <dataDir>/tools.
   async installTool(name, { onProgress } = {}) {
     if (name === 'ytdlp') await installYtDlp(this.toolsDir, { onProgress });
@@ -486,6 +509,7 @@ class DownloadManager extends EventEmitter {
     s.notifyOnComplete = Boolean(s.notifyOnComplete);
     s.ffmpegPath = String(s.ffmpegPath || '').trim();
     s.ytDlpPath = String(s.ytDlpPath || '').trim();
+    s.autoUpdate = s.autoUpdate !== false;
     s.schedule = normaliseSchedule(s.schedule);
     s.theme = THEMES.includes(s.theme) ? s.theme : 'system';
     s.accent = ACCENTS.includes(s.accent) ? s.accent : 'blue';

@@ -22,6 +22,7 @@ const { DownloadManager, readJson, writeJson } = require('./engine/DownloadManag
 const { createApiServer, listen } = require('./api-server');
 const { looksLikeDownloadUrl, CATEGORIES } = require('./engine/utils');
 const { findFfmpeg } = require('./engine/ffmpeg');
+const { createUpdater } = require('./updater');
 
 const POWER_COUNTDOWN_SECONDS = 60;
 const PAIR_TIMEOUT_MS = 120000;
@@ -34,6 +35,7 @@ let pairings = [];
 let powerTimer = null;
 let tray = null;
 let quitting = false;
+let updater = null;
 const pendingPairs = new Map();
 const ICON = path.join(__dirname, '..', 'build', 'icon.png');
 // Height of the custom title bar; the native window buttons are drawn over it.
@@ -94,6 +96,13 @@ async function boot() {
     if (!mainWindow?.isFocused()) notify('Login required', `${d.fileName} needs a user name and password`, showWindow);
   });
   manager.on('schedule-finished', startPowerCountdown);
+
+  updater = createUpdater({ send, autoCheck: () => manager.settings.autoUpdate });
+  // yt-dlp must keep up with YouTube's changes: the copy the app installed
+  // updates itself once a day.
+  const updateYtDlp = () => manager.settings.autoUpdate && manager.updateYtDlp().catch(() => {});
+  setTimeout(updateYtDlp, 30 * 1000).unref();
+  setInterval(updateYtDlp, 6 * 60 * 60 * 1000).unref();
 
   registerIpc();
   createWindow();
@@ -368,6 +377,10 @@ function registerIpc() {
   handle('dm:install-tool', (name) =>
     manager.installTool(name, { onProgress: (progress) => send('dm:tool-progress', { name, ...progress }) }),
   );
+  handle('dm:app-update-state', () => updater.state());
+  handle('dm:check-app-update', () => updater.check());
+  handle('dm:install-app-update', () => updater.install());
+  handle('dm:open-external', (url) => /^https:\/\/github\.com\/AranCastro\//.test(url) && shell.openExternal(url));
   handle('dm:platform', () => process.platform);
   handle('dm:titlebar', (colours) => {
     if (process.platform !== 'darwin' && mainWindow && colours?.color) {

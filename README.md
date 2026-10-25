@@ -44,14 +44,20 @@
 | Clipboard capture | Copying a direct file link opens the Add dialog with that link. |
 | MCP server | 16 tools for checking links (YouTube included), downloads, logins, the scheduler and settings. |
 
-## Download the `.exe`
+## Install
 
-GitHub Actions builds the app and runs the tests on Windows on every push. Open the **Actions** tab, select the latest **Build Windows exe** run, and download these artifacts:
+| Way | How |
+| --- | --- |
+| Installer (recommended) | Download `Anabranch-Setup-<version>.exe` from the [latest release](https://github.com/AranCastro/Download_Manager/releases/latest). It updates itself afterwards. |
+| Portable | `Anabranch-Portable-<version>.exe` from the same page runs without installation. It reports new versions but does not replace itself. |
+| Scoop | `scoop install https://github.com/AranCastro/Download_Manager/releases/latest/download/anabranch.json` |
+| winget | `winget install AranCastro.Anabranch` (once the package is accepted into winget-pkgs) |
 
-- **anabranch-windows** contains `Anabranch-Setup-1.2.1.exe` (an installer) and `Anabranch-Portable-1.2.1.exe` (one file, no installation).
-- **browser-extension** contains the extension as zip files for Chromium-based browsers and for Firefox.
+The executables are not yet code-signed, so Windows SmartScreen shows a warning on first launch; select **More info → Run anyway**.
 
-When a tag such as `v1.2.1` is pushed, the workflow also attaches these files to a GitHub Release. A release can also be made without pushing a tag: run **Build Windows exe** from the Actions tab (**Run workflow**) and enter the tag; the workflow creates the tag on the commit it built. The executables are not code-signed, so Windows SmartScreen shows a warning on first launch; select **More info → Run anyway**.
+**Updates.** The installed app checks GitHub Releases 20 seconds after start and every 6 hours, downloads a new version in the background, and offers **Restart now**. The copy of yt-dlp that the app installed is updated once a day. Both can be switched off under **Options → General → Updates**.
+
+**Builds.** GitHub Actions builds the app and runs the tests on Windows on every push (artifacts **anabranch-windows**, **browser-extension** and **package-manifests**). To publish a release, raise the version in `package.json`, then run **Build Windows exe** from the Actions tab (**Run workflow**) with the matching tag, for example `v1.3.0`. Pushing such a tag works too. [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) covers the extension stores, winget, Scoop and code signing.
 
 ## Browser extension
 
@@ -60,6 +66,8 @@ The installed app contains the extension in `resources\browser-extension\`. **Op
 1. **Chrome, Edge, Brave or Opera:** open `chrome://extensions` (or `edge://extensions`), turn on *Developer mode*, choose *Load unpacked*, and select the `chromium` folder.
 2. **Firefox:** open `about:debugging#/runtime/this-firefox`, choose *Load Temporary Add-on*, and select `manifest.json` in the `firefox` folder. Release versions of Firefox keep only signed add-ons after a restart; a permanent installation needs the zip to be signed through addons.mozilla.org.
 3. Click the Anabranch button in the browser toolbar, then **Connect**. Approve the request in the app window.
+
+The release also contains **store** builds of the extension (`anabranch-extension-*-store-*.zip`) for the Chrome Web Store, Edge Add-ons and addons.mozilla.org. They are identical except that the YouTube button is left out, because the stores do not accept YouTube downloaders; YouTube links still work in the app. The extension's data practices are described in [docs/PRIVACY.md](docs/PRIVACY.md).
 
 Pairing gives each browser its own token; the app stores only a hash of it. **Options → Browser** lists the connected browsers, and each one can be disconnected there. The toolbar panel controls which file types are captured, the minimum file size, the sites to skip, and whether each download is confirmed in the app first. If the app is closed when a download starts, the extension returns the download to the browser.
 
@@ -152,7 +160,7 @@ Requirements: Node.js 20 or later. FFmpeg is optional; the tests that need it ar
 ```bash
 npm install
 npm run dev        # Vite dev server + Electron with hot reload
-npm test           # 37 tests: engine, HTTP auth, FTP, HLS/DASH, YouTube (with a stand-in yt-dlp), probing, scheduler, API, MCP
+npm test           # 39 tests: engine, HTTP auth, FTP, HLS/DASH, YouTube (with a stand-in yt-dlp), probing, scheduler, API, MCP
 npm run build      # renderer, MCP bundle, browser extension (dist-extension/)
 npm run dist:win   # Windows installer and portable exe in release/
 ```
@@ -166,6 +174,7 @@ electron/
   main.js                    window, IPC, pairing approval, power actions, clipboard, notifications
   preload.js                 the only bridge between the UI and the main process
   api-server.js              local REST API (MCP server and browser extension)
+  updater.js                 app updates from GitHub Releases (electron-updater)
   engine/
     DownloadManager.js       queue, concurrency, scheduler hooks, secrets, persistence
     BaseDownload.js          shared state, speed, pause/resume lifecycle
@@ -194,7 +203,8 @@ Settings, the download list, encrypted secrets and browser pairings are stored i
 - YouTube support depends on yt-dlp. When YouTube changes its site, update yt-dlp under **Options → General**. The app does not work around YouTube's bot check; the browser extension's cookies are the supported route.
 - For a DASH manifest with several periods, only the first period is downloaded.
 - Supported logins are HTTP Basic, HTTP Digest and FTP. NTLM and Kerberos are not supported; form-based sign-ins work through the browser extension, which passes the session cookies.
-- The extension is not published in the Chrome Web Store or on addons.mozilla.org. It is loaded unpacked (Chromium) or as a temporary add-on (Firefox).
+- Until the store listings are approved, the extension is loaded unpacked (Chromium) or as a temporary add-on (Firefox); see [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md).
+- The executables are not yet code-signed (an application to SignPath Foundation is described in the same guide).
 
 ## Licence
 

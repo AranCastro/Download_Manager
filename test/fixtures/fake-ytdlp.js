@@ -19,8 +19,16 @@ const url = args[args.length - 1];
 
 log(`ARGS ${JSON.stringify(args)}`);
 
+// Self-update: the version moves on (kept in a file beside the log).
+const versionFile = process.env.FAKE_YTDLP_LOG && `${process.env.FAKE_YTDLP_LOG}.version`;
+if (args.includes('-U')) {
+  if (versionFile) fs.writeFileSync(versionFile, '2026.10.20');
+  console.log('Updated yt-dlp to stable@2026.10.20');
+  process.exit(0);
+}
+
 if (args.includes('--version')) {
-  console.log('2026.10.01');
+  console.log(versionFile && fs.existsSync(versionFile) ? fs.readFileSync(versionFile, 'utf8') : '2026.10.01');
   process.exit(0);
 }
 

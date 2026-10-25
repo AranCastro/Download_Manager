@@ -32,6 +32,10 @@ contextBridge.exposeInMainWorld('dm', {
   probe: invoke('dm:probe'),
   toolStatus: invoke('dm:tools'),
   installTool: invoke('dm:install-tool'),
+  appUpdateState: invoke('dm:app-update-state'),
+  checkAppUpdate: invoke('dm:check-app-update'),
+  installAppUpdate: invoke('dm:install-app-update'),
+  openExternal: invoke('dm:open-external'),
   platform: invoke('dm:platform'),
   setTitleBar: invoke('dm:titlebar'),
   openFile: invoke('dm:open-file'),
@@ -52,4 +56,5 @@ contextBridge.exposeInMainWorld('dm', {
   onPairClosed: subscribe('dm:pair-closed'),
   onPowerCountdown: subscribe('dm:power-countdown'),
   onToolProgress: subscribe('dm:tool-progress'),
+  onAppUpdate: subscribe('dm:app-update'),
 });

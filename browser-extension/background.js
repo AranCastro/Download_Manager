@@ -5,8 +5,10 @@
 // - Adds "Download with Anabranch" and "Download all links" menus.
 // - Detects HLS/DASH streams and video files a page loads and lists them in
 //   the toolbar panel.
+/* youtube:start */
 // - Puts a Download button on YouTube's player (youtube.js) and sends the
 //   video page to the app, which downloads it with yt-dlp.
+/* youtube:end */
 //
 // The app is reached at http://127.0.0.1:<port>; the token comes from a
 // one-time pairing the user approves in the app.
@@ -307,9 +309,12 @@ async function refreshBadge(tabId, count) {
   }
 }
 
-// YouTube's player streams scrambled fragments that only yt-dlp can turn
-// into a video; the page itself is sent instead (player button or panel).
+// YouTube's own media requests are not listed: its player streams scrambled
+// fragments that cannot be saved as a playable file.
 const SITE_HOSTS = /(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com|googlevideo\.com)$/;
+/* youtube:start */
+// Marked YouTube code like this is left out of the store builds
+// (scripts/build-extension.mjs).
 const isYouTubePage = (url) => {
   try {
     const u = new URL(url);
@@ -318,6 +323,7 @@ const isYouTubePage = (url) => {
     return false;
   }
 };
+/* youtube:end */
 
 function classify(url, contentType) {
   if (SITE_HOSTS.test(new URL(url).hostname)) return null;
@@ -425,6 +431,7 @@ async function handleMessage(msg, sender) {
       });
       return sendItems([item]);
     }
+    /* youtube:start */
     case 'download-page': {
       // A video page (YouTube): the app hands it to yt-dlp, with the
       // browser's YouTube sign-in for members-only or age-restricted videos.
@@ -433,6 +440,7 @@ async function handleMessage(msg, sender) {
       const storeId = msg.storeId ?? sender?.tab?.cookieStoreId;
       return sendItems([await buildItem({ url, kind: 'site', storeId })]);
     }
+    /* youtube:end */
     case 'save-settings': {
       const patch = Object.fromEntries(Object.entries(msg.settings || {}).filter(([k]) => SETTING_KEYS.includes(k)));
       await ext.storage.local.set(patch);

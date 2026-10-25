@@ -106,7 +106,7 @@ const tool = (handler) => async (args) => {
   }
 };
 
-const server = new McpServer({ name: 'anabranch', version: '1.2.1' });
+const server = new McpServer({ name: 'anabranch', version: '1.3.0' });
 
 const STATUSES = ['queued', 'scheduled', 'connecting', 'downloading', 'merging', 'paused', 'completed', 'error', 'auth-required'];
 
@@ -333,6 +333,7 @@ server.registerTool(
       connections: z.number().int().min(1).max(32).optional().describe('Default connections per download'),
       speedLimitKBps: z.number().int().min(0).optional().describe('Total speed limit in KB/s; 0 = unlimited'),
       ffmpegPath: z.string().optional().describe('Path to ffmpeg(.exe) used to merge stream tracks; empty = PATH'),
+      autoUpdate: z.boolean().optional().describe('Update the app and its own yt-dlp automatically'),
       ytDlpPath: z.string().optional().describe('Path to yt-dlp(.exe) used for YouTube; empty = the copy installed by the app, then PATH'),
     },
   },

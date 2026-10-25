@@ -53,6 +53,7 @@ function nameFor(entry, tab) {
   return title.slice(0, 120) || undefined;
 }
 
+/* youtube:start */
 const isYouTubeVideo = (url) => {
   try {
     const u = new URL(url);
@@ -81,15 +82,20 @@ function renderPageVideo(tab) {
     }
   };
 }
+/* youtube:end */
 
 async function renderMedia() {
   const tab = await activeTab();
+  let pageVideo = false;
+  /* youtube:start */
+  pageVideo = isYouTubeVideo(tab.url);
   renderPageVideo(tab);
+  /* youtube:end */
   const { media } = await send({ type: 'media', tabId: tab.id });
   const list = $('media');
   list.replaceChildren();
-  $('no-media').hidden = media.length > 0 || isYouTubeVideo(tab.url);
-  $('media-heading').hidden = !media.length && isYouTubeVideo(tab.url);
+  $('no-media').hidden = media.length > 0 || pageVideo;
+  $('media-heading').hidden = !media.length && pageVideo;
   for (const entry of media) {
     const li = document.createElement('li');
     const badge = document.createElement('span');

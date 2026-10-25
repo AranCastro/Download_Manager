@@ -173,6 +173,16 @@ test('MP3 audio goes to the Music folder; browser cookies reach yt-dlp', async (
   await manager.shutdown();
 });
 
+test('the app updates its own yt-dlp at most once a day', async () => {
+  const { manager, log } = await makeManager();
+  const first = await manager.updateYtDlp();
+  assert.deepEqual(first, { version: '2026.10.20', before: '2026.10.01' });
+  assert.match(log(), /"-U"/);
+  assert.deepEqual(await manager.updateYtDlp(), { skipped: 'recent' });
+  assert.equal((await manager.toolStatus()).ytdlp.version, '2026.10.20');
+  await manager.shutdown();
+});
+
 test('deleting an unfinished video removes its partial files', async () => {
   process.env.FAKE_YTDLP_DELAY = '40';
   const { manager } = await makeManager();

@@ -137,6 +137,47 @@ function ToolField({ tool, label, value, onChange, missingText, canInstall }) {
   );
 }
 
+// The installed app updates itself; the portable one links to the release.
+function UpdatesField({ checked, onToggle }) {
+  const [state, setState] = useState(null);
+  useEffect(() => {
+    api.appUpdateState?.().then(setState);
+    return api.onAppUpdate?.(setState);
+  }, []);
+  if (!state) return null;
+  const { status, version, percent, error, selfUpdating } = state;
+  const text = {
+    idle: `Version ${state.current}`,
+    checking: 'Checking for updates…',
+    latest: `Version ${state.current} is the latest.`,
+    downloading: `Downloading version ${version}${percent ? ` (${percent}%)` : ''}…`,
+    ready: `Version ${version} is ready. It installs when Anabranch restarts.`,
+    available: `Version ${version} is available.${selfUpdating ? '' : ' This copy cannot update itself; download the new version.'}`,
+    error: `Could not check for updates: ${error}`,
+  }[status];
+  return (
+    <div className="field">
+      <span>Updates</span>
+      <label className="check">
+        <input type="checkbox" checked={checked} onChange={onToggle} />
+        Update Anabranch and yt-dlp automatically
+      </label>
+      <div className="field-row" style={{ alignItems: 'center' }}>
+        <small className={status === 'error' ? 'warn-text' : ''} style={{ flex: 1 }}>{text}</small>
+        {status === 'ready' && (
+          <button type="button" className="btn btn-primary" onClick={() => api.installAppUpdate()}>Restart to update</button>
+        )}
+        {status === 'available' && (
+          <button type="button" className="btn" onClick={() => api.openExternal(state.page)}>Download page</button>
+        )}
+        {!['ready', 'available', 'downloading', 'checking'].includes(status) && (
+          <button type="button" className="btn" onClick={() => api.checkAppUpdate()}>Check now</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function BrowserTab() {
   const [pairings, setPairings] = useState([]);
   const [folders, setFolders] = useState({});
@@ -300,6 +341,7 @@ export function SettingsDialog({ settings, onClose, initialTab = 'appearance' })
             <input type="checkbox" checked={draft.notifyOnComplete} onChange={set('notifyOnComplete')} />
             Show a notification when a download completes
           </label>
+          <UpdatesField checked={draft.autoUpdate} onToggle={set('autoUpdate')} />
           <ToolField
             tool="ytdlp"
             label="yt-dlp (YouTube and other video sites)"
