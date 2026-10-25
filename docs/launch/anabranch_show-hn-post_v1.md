@@ -5,7 +5,7 @@ Post at <https://news.ycombinator.com/submit>. Put the GitHub URL in the **url**
 ## Before posting
 
 - [ ] v1.3.0 is released, and the Scoop command on the website works.
-- [ ] GitHub Pages is switched on, and <https://arancastro.github.io/Download_Manager/demo/> opens.
+- [ ] The website is live, and <https://anabranch.draran.online/demo/> opens over HTTPS.
 - [ ] You have about two hours free to answer comments. Early replies matter more than anything else on Hacker News.
 - [ ] Post on a weekday between 17:30 and 19:30 IST (08:00–10:00 US Eastern).
 - [ ] Do not ask colleagues or students to upvote. Hacker News detects voting rings and buries those posts.
@@ -61,7 +61,7 @@ Stack: Electron + React. The download engine is plain Node.js, with node:test
 tests against local HTTP, FTP and HLS servers. MIT licence.
 
 You can try the interface in the browser, with simulated downloads, here:
-https://arancastro.github.io/Download_Manager/demo/
+https://anabranch.draran.online/demo/
 
 Known gaps: Windows builds only for now; the exe is not code-signed yet, so
 SmartScreen asks for confirmation; DASH manifests with several periods download
