@@ -15,7 +15,7 @@ const { version } = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const source = 'browser-extension';
 const out = 'dist-extension';
 const files = ['background.js', 'youtube.js', 'popup.html', 'popup.js', 'popup.css', 'icons'];
-const YOUTUBE_BLOCK = /[ \t]*(\/\*|<!--) youtube:start (\*\/|-->)[\s\S]*?(\/\*|<!--) youtube:end (\*\/|-->)\n/g;
+const YOUTUBE_BLOCK = /[ \t]*(\/\*|<!--) youtube:start (\*\/|-->)[\s\S]*?(\/\*|<!--) youtube:end (\*\/|-->)\r?\n/g;
 const icons = Object.fromEntries([16, 32, 48, 128].map((s) => [s, `icons/icon-${s}.png`]));
 
 const common = {
